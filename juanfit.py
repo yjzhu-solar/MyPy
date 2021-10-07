@@ -37,7 +37,8 @@ rcParams['xtick.minor.size'] =2
 rcParams['ytick.major.width'] = 1
 rcParams['ytick.major.size'] = 4
 rcParams['ytick.minor.width'] = 1
-rcParams['ytick.minor.size'] =2 
+rcParams['ytick.minor.size'] = 2 
+rcParams['text.latex.preamble'] = r'\usepackage[T1]{fontenc} \usepackage{amsmath}'
 
 
 class SpectrumFit:
