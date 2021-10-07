@@ -567,7 +567,7 @@ class SpectrumFitSingle:
                         ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.7)   
 
             if self.err is None:
-                ax_res.scatter(self.wvl,res_fit,marker="o",markersize=5,color=colors[3])
+                ax_res.scatter(self.wvl,res_fit,marker="o",s=15,color=colors[3])
             else:
                 ax_res.errorbar(self.wvl,res_fit,self.err,ds='steps-mid',color=colors[3],capsize=3,
                                 lw=2,ls="none",marker="o",markersize=5)
