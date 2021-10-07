@@ -460,7 +460,7 @@ class SpectrumFitSingle:
 
     
     def plot(self, plot_fit=True,plot_params=True, plot_mcmc=False,plot_hmc=False,
-                xlim=None,color_style="Warm"):
+                xlim=None,color_style="Warm",plot_title=None):
         '''
             Plot the input spectra and fitting results. 
 
@@ -581,10 +581,11 @@ class SpectrumFitSingle:
             ax_res.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
             ax_res.yaxis.set_minor_locator(ticker.AutoMinorLocator(5))
 
-        if xlim is None:
-            pass
-        else:
+        if xlim is not None:
             ax.set_xlim(xlim)
+
+        if plot_title is not None:
+            ax.set_title(plot_title,fontsize=18)
 
         if plot_params is True:
             if plot_mcmc or plot_hmc:
