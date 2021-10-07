@@ -489,6 +489,7 @@ class SpectrumFitSingle:
         ax.tick_params(which="major",width=1.2,length=8,direction="in")
         ax.tick_params(which="minor",width=1.2,length=4,direction="in")
         ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(5))
         #print("Wavelength:",self.line_wvl_fit)
         #print("Width:",self.fwhm_fit)
         #print("Width Error:",self.fwhm_err)
@@ -566,7 +567,7 @@ class SpectrumFitSingle:
                         ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.7)   
 
             if self.err is None:
-                ax_res.scatter(self.wvl,res_fit)
+                ax_res.scatter(self.wvl,res_fit,marker="o",markersize=5,color=colors[3])
             else:
                 ax_res.errorbar(self.wvl,res_fit,self.err,ds='steps-mid',color=colors[3],capsize=3,
                                 lw=2,ls="none",marker="o",markersize=5)
@@ -578,6 +579,7 @@ class SpectrumFitSingle:
             ax_res.tick_params(which="major",width=1.2,length=8,direction="in")
             ax_res.tick_params(which="minor",width=1.2,length=4,direction="in")
             ax_res.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+            ax_res.yaxis.set_minor_locator(ticker.AutoMinorLocator(5))
 
         if xlim is None:
             pass
