@@ -337,6 +337,15 @@ class SpectrumFitSingle:
         '''
             Fit line profiles using the Monte-Carlo method described 
             in Hahn et al. 2012, ApJ, 753, 36.
+
+            Parameters
+            ----------
+            ignore_err : bool, optional 
+            If True, ignore the input error in fitting. Default is False.
+            n_chain : int, optional 
+            The number of Monte Carlo iteration. Default is 10,000.
+            cred_lvl: integer or float between 0 - 100, optional 
+            Credible level of the fitting uncertainty. Default is 90.   
         '''
 
         self.run_lse(ignore_err=ignore_err)
@@ -461,7 +470,7 @@ class SpectrumFitSingle:
 
     
     def plot(self, plot_fit=True,plot_params=True, plot_mcmc=False,plot_hmc=False,
-                xlim=None,color_style="Warm",plot_title=None):
+                color_style="Warm",plot_title=None,xlabel=None,ylabel=None,xlim=None):
         '''
             Plot the input spectra and fitting results. 
 
@@ -473,10 +482,20 @@ class SpectrumFitSingle:
             If True, plot the fitted parameters by the figure. Default is True. 
             plot_mcmc : bool, optional 
             If True, plots the MCMC results. Default is False.
+            plot_hmc: bool, optional 
+            If True, plots the Monte Carlo fitting results using the method described in 
+            Hahn et al. 2012, ApJ, 753, 36. Default is False. 
             xlim : [left limit, right_lim], optional 
             If provided, set the left and right limit of the x-axis. Default is None. 
             color_style : {"Warm","Cold"}, optional
             Color style of the plot. Default is "Warm".
+            plot_title : string, optional 
+            Set to be the title of the plot. Default is None.
+            xlabel: string, optional 
+            Set to be the label of the x-axis. Default is None.
+            ylabel: string, optional 
+            Set to be the label of the y-axis. Default is None. 
+
         '''
         if plot_fit is True:
             fig = plt.subplots(figsize=(8,10))
@@ -484,9 +503,12 @@ class SpectrumFitSingle:
             ax_res = plt.subplot2grid((8,1),(6,0),rowspan = 2,colspan = 1)
         else:
             fig, ax = plt.subplots(figsize=(8,6))
-        ax.tick_params(labelsize=18)
+        ax.tick_params(which="both",labelsize=18,right=True,top=True)
         #ax.set_xlabel("Wavelength",fontsize=18)
-        ax.set_ylabel("Intensity",fontsize=18)
+        if ylabel is None:
+            ax.set_ylabel("Intensity",fontsize=18)
+        else:
+            ax.set_ylabel(ylabel,fontsize=18)
         ax.tick_params(which="major",width=1.2,length=8,direction="in")
         ax.tick_params(which="minor",width=1.2,length=4,direction="in")
         ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
@@ -574,13 +596,17 @@ class SpectrumFitSingle:
                                 lw=2,ls="none",marker="o",markersize=5)
 
             ax_res.axhline(0,ls="--",lw=2,color="#91989F",alpha=0.7) 
-            ax_res.set_xlabel(r"$\textrm{Wavelength}$",fontsize=18)
+            if xlabel is None:
+                ax_res.set_xlabel(r"$\textrm{Wavelength}$",fontsize=18)
+            else:
+                ax_res.set_xlabel(xlabel,fontsize=18)
             ax_res.set_ylabel(r"$r$",fontsize=18)
-            ax_res.tick_params(labelsize=18)
+            ax_res.tick_params(which="both",labelsize=18,top=True,right=True)
             ax_res.tick_params(which="major",width=1.2,length=8,direction="in")
             ax_res.tick_params(which="minor",width=1.2,length=4,direction="in")
             ax_res.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
             ax_res.yaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+
 
         if xlim is not None:
             ax.set_xlim(xlim)
@@ -588,7 +614,7 @@ class SpectrumFitSingle:
         if plot_title is not None:
             ax.set_title(plot_title,fontsize=18)
 
-        if plot_params is True:
+        if (plot_params and plot_fit) is True:
             if plot_mcmc or plot_hmc:
                 for ii in range(self.line_number):
                     ax.text(1.05+(ii//2)*0.5,0.9-(ii%2)*0.5,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
