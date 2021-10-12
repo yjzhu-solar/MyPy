@@ -41,11 +41,22 @@ rcParams['ytick.minor.size'] = 2
 rcParams['text.latex.preamble'] = r'\usepackage[T1]{fontenc} \usepackage{amsmath}'
 
 
-class SpectrumFit:
+class SpectrumFitRow:
+    '''
+        SpectrumFitRow fits spectral lines in a row. (e.g., along the slit of a slit-jaw
+        spectrograph)
+    '''
     def __init__(self, data, wvl, line_number, line_wvl_init, int_max_init, \
                 fwhm_init, err=None, same_width=False, stray_light=False, \
                 stray_light_wvl_fixed=True, stray_wvl_init=None, \
                 stray_int_total=None, stray_fwhm=None):
+
+        '''
+            Initialize the SpectrumFitRow class
+            
+            Parameters
+            ----------
+        '''
         
         #input parameters
         self.data = data
@@ -132,7 +143,7 @@ class SpectrumFit:
 
 
     
-    def plot(self, plot_fit=True, mcmc=False):
+    def plot_fit(self, plot_fit=True, mcmc=False):
             nrows = int(np.ceil(self.frame_number/4.))
             fig, axes = plt.subplots(nrows,4,figsize=(16,nrows*3))
 
@@ -170,6 +181,9 @@ class SpectrumFit:
                                                     + self.int_cont_fit[ii]
                                     ax_.plot(self.wvl_plot,line_profile,color="#E9002D",ls="-",lw=1.5,alpha=0.7)                                
                                     
+    def plot_width(self,hmc=False,mcmc=False):
+
+        pass 
 
 
 class SpectrumFitSingle:
