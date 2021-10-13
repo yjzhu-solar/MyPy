@@ -288,7 +288,7 @@ class SpectrumFitSingle:
             else:
                 self.err_tofit = self.err
 
-    def run_lse(self,ignore_err=False):
+    def run_lse(self,ignore_err=False,absolute_sigma=True):
         '''
             Performs least square estimation (Chi square fitting)
             to the spectral line(s).
@@ -297,6 +297,8 @@ class SpectrumFitSingle:
             ----------
             ignore_err : bool, optional
             If True, ignores the input error. Default is False. 
+            absolute_sigma: bool, optional
+            If True, the errors have the same unit as data. Default is True.  
         '''
         if self.stray_light is False:
             popt = np.concatenate((self.line_wvl_init,
@@ -309,7 +311,7 @@ class SpectrumFitSingle:
                 err_lse = self.err_tofit 
             if self.same_width is True:
                 popt, pcov = curve_fit(multi_gaussian_same_width, self.wvl_tofit, self.data_tofit,
-                                    p0=popt,sigma=err_lse)
+                                    p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma)
                 
                 self.line_wvl_fit = popt[:self.line_number]
                 self.int_total_fit = popt[self.line_number:self.line_number*2]
@@ -323,7 +325,7 @@ class SpectrumFitSingle:
                 self.int_cont_err = perr[-1]
             else:
                 popt, pcov = curve_fit(multi_gaussian_diff_width, self.wvl_tofit, self.data_tofit,
-                                    p0=popt,sigma=err_lse)
+                                    p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma)
                 
                 self.line_wvl_fit = popt[:self.line_number]
                 self.int_total_fit = popt[self.line_number:self.line_number*2]
@@ -338,7 +340,7 @@ class SpectrumFitSingle:
         else:
             print("Fitting with stray light is not supported in this version.")
 
-    def run_HahnMC(self,ignore_err=False,n_chain=10000,cred_lvl=90):
+    def run_HahnMC(self,ignore_err=False,n_chain=10000,cred_lvl=90,absolute_sigma=True):
         '''
             Fit line profiles using the Monte-Carlo method described 
             in Hahn et al. 2012, ApJ, 753, 36.
@@ -353,7 +355,7 @@ class SpectrumFitSingle:
             Credible level of the fitting uncertainty. Default is 90.   
         '''
 
-        self.run_lse(ignore_err=ignore_err)
+        self.run_lse(ignore_err=ignore_err,absolute_sigma=absolute_sigma)
         if self.same_width is True:
             p_fit = np.concatenate((self.line_wvl_fit,self.int_total_fit,self.fwhm_fit,
                                     self.int_cont_fit),axis=None)
@@ -386,7 +388,8 @@ class SpectrumFitSingle:
         if self.same_width is True:
             for ii in range(n_chain):
                 popt_chain[ii,:], _ = curve_fit(multi_gaussian_same_width, self.wvl_tofit,
-                                            self.data_tofit+random_err[ii,:],p0=popt,sigma=err_hmc)
+                                            self.data_tofit+random_err[ii,:],p0=popt,sigma=err_hmc,
+                                            absolute_sigma=absolute_sigma)
             
             popt_result = np.zeros_like(popt)
             popt_err = np.zeros((2,popt.shape[0]))
@@ -408,7 +411,8 @@ class SpectrumFitSingle:
         else:
             for ii in range(n_chain):
                 popt_chain[ii,:], _ = curve_fit(multi_gaussian_diff_width, self.wvl_tofit,
-                                            self.data_tofit+random_err[ii,:],p0=popt,sigma=err_hmc)
+                                            self.data_tofit+random_err[ii,:],p0=popt,sigma=err_hmc,
+                                            absolute_sigma=absolute_sigma)
             
             popt_result = np.zeros_like(popt)
             popt_err = np.zeros((2,popt.shape[0]))
