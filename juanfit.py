@@ -6,10 +6,10 @@
     Institute: University of Michigan
     Email: yjzhu(at)umich(dot)edu
     Date create: 07/20/2021
-    Date Last Modified: 10/06/2021
+    Date Last Modified: 10/13/2021
     Python Version: 3.8
     Statues: In development
-    Version: 0.0.1
+    Version: 0.0.2
     Description: This is a naive and dirty python script 
     to perform single/multiple Gaussian fitting to the 
     spectral lines.
@@ -41,152 +41,6 @@ rcParams['ytick.minor.width'] = 1
 rcParams['ytick.minor.size'] = 2 
 rcParams['text.latex.preamble'] = r'\usepackage[T1]{fontenc} \usepackage{amsmath}'
 
-
-class SpectrumFitRow:
-    '''
-        SpectrumFitRow fits spectral lines in a row. (e.g., along the slit of a slit-jaw
-        spectrograph)
-    '''
-    def __init__(self, data, wvl, line_number, line_wvl_init, int_max_init, \
-                fwhm_init, err=None, same_width=False, stray_light=False, \
-                stray_light_wvl_fixed=True, stray_wvl_init=None, \
-                stray_int_total=None, stray_fwhm=None):
-
-        '''
-            Initialize the SpectrumFitRow class
-            
-            Parameters
-            ----------
-        '''
-        
-        #input parameters
-        self.data = data
-        self.wvl = wvl
-        self.line_number = line_number
-        self.line_wvl_init = np.array(line_wvl_init)
-        self.int_max_init = np.array(int_max_init)
-        self.fwhm_init = np.array(fwhm_init)
-        self.err = err
-        self.same_width = same_width
-        self.stray_light = stray_light
-        self.stray_light_wvl_fixed = stray_light_wvl_fixed
-        self.stray_wvl_init = stray_wvl_init
-        self.stray_int_total = stray_int_total
-        self.stray_fwhm = stray_fwhm
-
-        #instance properties
-        self.shape = data.shape
-        self.wvl_plot = np.linspace(self.wvl[0],self.wvl[-1],101)
-        if len(data.shape) == 1:
-            self.frame_number = 1
-        else:
-            self.frame_number = self.shape[0]
-
-    
-        
-        #fitted parameters
-        self.line_wvl_fit = np.zeros((self.frame_number,self.line_number))
-        self.line_wvl_err = np.zeros((self.frame_number,self.line_number))
-
-        self.int_total_fit = np.zeros((self.frame_number,self.line_number))
-        self.int_total_err = np.zeros((self.frame_number,self.line_number))
-
-        if same_width is True:
-            self.fwhm_fit = np.zeros(self.frame_number)
-            self.fwhm_err = np.zeros(self.frame_number)
-        else:
-            self.fwhm_fit = np.zeros((self.frame_number,self.line_number))
-            self.fwhm_err = np.zeros((self.frame_number,self.line_number))
-
-        self.int_cont_fit = np.zeros(self.frame_number)
-        self.int_cont_err = np.zeros(self.frame_number)
-
-
-
-    def run_lse(self,ignore_err=False):
-        if self.stray_light is False:
-            popt = np.concatenate((self.line_wvl_init,
-                                   self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
-                                   self.fwhm_init,np.mean(self.data[0,:2])),axis = None)
-            
-            if (self.err is None) or (ignore_err is True):
-                if self.same_width is True:
-                    for ii in range(self.frame_number):
-                        popt, pcov = curve_fit(multi_gaussian_same_width, self.wvl, self.data[ii,:],
-                                            p0=popt)
-                        
-                        
-                        self.line_wvl_fit[ii,:] = popt[:self.line_number]
-                        self.int_total_fit[ii,:] = popt[self.line_number:self.line_number*2]
-                        self.fwhm_fit[ii] = popt[-2]
-                        self.int_cont_fit[ii] = popt[-1]
-
-                        perr = np.sqrt(np.diagonal(pcov))
-                        self.line_wvl_err[ii,:] = perr[:self.line_number]
-                        self.int_total_err[ii,:] = perr[self.line_number:self.line_number*2]
-                        self.fwhm_err[ii] = perr[-2]
-                        self.int_cont_err[ii] = perr[-1]
-                else:
-                    for ii in range(self.frame_number):
-                        popt, pcov = curve_fit(multi_gaussian_diff_width, self.wvl, self.data[ii,:],
-                                            p0=popt)
-                        
-                        self.line_wvl_fit[ii,:] = popt[:self.line_number]
-                        self.int_total_fit[ii,:] = popt[self.line_number:self.line_number*2]
-                        self.fwhm_fit[ii] = popt[self.line_number*2:self.line_number*3]
-                        self.int_cont_fit[ii] = popt[-1]
-
-                        perr = np.sqrt(np.diagonal(pcov))
-                        self.line_wvl_err[ii,:] = perr[:self.line_number]
-                        self.int_total_err[ii,:] = perr[self.line_number:self.line_number*2]
-                        self.fwhm_err[ii] = perr[self.line_number*2:self.line_number*3]
-                        self.int_cont_err[ii] = perr[-1]                  
-
-
-    
-    def plot_fit(self, plot_fit=True, mcmc=False):
-            nrows = int(np.ceil(self.frame_number/4.))
-            fig, axes = plt.subplots(nrows,4,figsize=(16,nrows*3))
-
-            for ii, ax_ in enumerate(axes.flatten()):
-                if ii < self.frame_number:
-                    if self.err is None:
-                        ln1, = ax_.step(self.wvl,self.data[ii,:],where="mid",color="#E87A90",label = r"$I_{\rm obs}$",lw=2)
-                    else:
-                        ln1 = ax_.errorbar(self.wvl,self.data[ii,:],yerr = self.err[ii,:],ds='steps-mid',color="#E87A90",capsize=2,
-                        label = r"$I_{\rm obs}$",lw=1.5)
-
-                    if plot_fit is True:
-                        if self.same_width is True:
-                            p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
-                                                    self.int_cont_fit[ii]),axis=None)
-                            spec_fit = multi_gaussian_same_width(self.wvl_plot,*p_fit)
-                        else:
-                            p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
-                                                    self.int_cont_fit[ii]),axis=None)
-                            spec_fit = multi_gaussian_diff_width(self.wvl_plot,*p_fit)                            
-
-                        ln2, = ax_.plot(self.wvl_plot,spec_fit,color="#FC9F40",ls="-",label = r"$I_{\rm fit}$",lw=1.5)
-
-                        if self.line_number > 1:
-                            if self.same_width is True:
-                                for jj in range(self.line_number):
-                                    line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
-                                                            self.int_total_fit[ii,jj], self.fwhm_fit[ii]) \
-                                                    + self.int_cont_fit[ii]
-                                    ax_.plot(self.wvl_plot,line_profile,color="#E9002D",ls="-",lw=1.5,alpha=0.7)
-                            else:
-                                for jj in range(self.line_number):
-                                    line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
-                                                            self.int_total_fit[ii,jj], self.fwhm_fit[ii,jj]) \
-                                                    + self.int_cont_fit[ii]
-                                    ax_.plot(self.wvl_plot,line_profile,color="#E9002D",ls="-",lw=1.5,alpha=0.7)                                
-                                    
-    def plot_width(self,hmc=False,mcmc=False):
-
-        pass 
-
-
 class SpectrumFitSingle:
     '''
         SpectrumFitSingle performs single/multiple Gaussian fitting 
@@ -217,9 +71,10 @@ class SpectrumFitSingle:
             err : 1-D array , optional 
                 Errors in the intensity at different wavelengths. If provided,
                 will be used to calculate the likelihood function. Default is None.
-            same_width : bool, optional 
-                If True, forces the fitted spectral lines have the same width.
-                Default is False.
+            same_width : bool or a list of bool, optional 
+                If True, forces the fitted spectral lines have the same width. If provided 
+                as a list of bools, only forces the spectral lines corresponding to True value
+                have the same width in the fitting. Default is False.
             stray_light : bool, optional 
                 If True, adds the stray light profile to the fitting. Default is False.
             stray_wvl_init : scalar or 1-D array, optional
@@ -301,16 +156,50 @@ class SpectrumFitSingle:
             If True, the errors have the same unit as data. Default is True.  
         '''
         if self.stray_light is False:
-            popt = np.concatenate((self.line_wvl_init,
-                                   self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
-                                   self.fwhm_init,np.mean(self.data[:2])),axis = None)
+            if type(self.same_width) is list:
+                line_same_width_index = np.where(self.same_width)[0]
+                new_fwhm_init = np.concatenate((np.delete(self.fwhm_init,line_same_width_index),
+                                                np.average(self.fwhm_init[line_same_width_index])),
+                                                axis=None)
+                popt = np.concatenate((self.line_wvl_init,
+                                    self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
+                                    new_fwhm_init,np.mean(self.data[:2])),axis = None)
+            else:
+                popt = np.concatenate((self.line_wvl_init,
+                                    self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
+                                    self.fwhm_init,np.mean(self.data[:2])),axis = None)
             
             if ignore_err is True:
                 err_lse = None
             else:
                 err_lse = self.err_tofit 
-            if self.same_width is True:
-                popt, pcov = curve_fit(multi_gaussian_same_width, self.wvl_tofit, self.data_tofit,
+            if type(self.same_width) is list:
+                popt, pcov = curve_fit(self.multi_gaussian_mixture_width, self.wvl_tofit, self.data_tofit,
+                                    p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma) 
+
+                self.line_wvl_fit = popt[:self.line_number]
+                self.int_total_fit = popt[self.line_number:self.line_number*2]
+                self.int_cont_fit = popt[-1]
+
+                perr = np.sqrt(np.diagonal(pcov))
+                self.line_wvl_err = perr[:self.line_number]
+                self.int_total_err = perr[self.line_number:self.line_number*2]
+                self.int_cont_err = perr[-1]
+
+                self.fwhm_fit = np.zeros(self.line_number)
+                self.fwhm_err = np.zeros(self.line_number)
+                fwhm_arg_index_cont = 0 
+                for ii in range(self.line_number):
+                    if self.same_width[ii] is True:
+                        self.fwhm_fit[ii] = popt[-2]
+                        self.fwhm_err[ii] = perr[-2]
+                    else:
+                        self.fwhm_fit[ii] = popt[self.line_number*2+fwhm_arg_index_cont]
+                        self.fwhm_err[ii] = perr[self.line_number*2+fwhm_arg_index_cont]
+                        fwhm_arg_index_cont += 1
+
+            elif self.same_width is True:
+                popt, pcov = curve_fit(self.multi_gaussian_same_width, self.wvl_tofit, self.data_tofit,
                                     p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma)
                 
                 self.line_wvl_fit = popt[:self.line_number]
@@ -324,7 +213,7 @@ class SpectrumFitSingle:
                 self.fwhm_err = perr[-2]
                 self.int_cont_err = perr[-1]
             else:
-                popt, pcov = curve_fit(multi_gaussian_diff_width, self.wvl_tofit, self.data_tofit,
+                popt, pcov = curve_fit(self.multi_gaussian_diff_width, self.wvl_tofit, self.data_tofit,
                                     p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma)
                 
                 self.line_wvl_fit = popt[:self.line_number]
@@ -359,11 +248,11 @@ class SpectrumFitSingle:
         if self.same_width is True:
             p_fit = np.concatenate((self.line_wvl_fit,self.int_total_fit,self.fwhm_fit,
                                     self.int_cont_fit),axis=None)
-            spec_fit = multi_gaussian_same_width(self.wvl_tofit,*p_fit)
+            spec_fit = self.multi_gaussian_same_width(self.wvl_tofit,*p_fit)
         else:
             p_fit = np.concatenate((self.line_wvl_fit,self.int_total_fit,self.fwhm_fit,
                                     self.int_cont_fit),axis=None)
-            spec_fit = multi_gaussian_diff_width(self.wvl_tofit,*p_fit)  
+            spec_fit = self.multi_gaussian_diff_width(self.wvl_tofit,*p_fit)  
 
         if self.err_tofit is None:                        
             err_diff = np.abs(self.data_tofit - spec_fit)
@@ -387,7 +276,7 @@ class SpectrumFitSingle:
             err_hmc = err_diff
         if self.same_width is True:
             for ii in range(n_chain):
-                popt_chain[ii,:], _ = curve_fit(multi_gaussian_same_width, self.wvl_tofit,
+                popt_chain[ii,:], _ = curve_fit(self.multi_gaussian_same_width, self.wvl_tofit,
                                             self.data_tofit+random_err[ii,:],p0=popt,sigma=err_hmc,
                                             absolute_sigma=absolute_sigma)
             
@@ -410,7 +299,7 @@ class SpectrumFitSingle:
             self.int_cont_err_hmc = popt_err[:,-1]
         else:
             for ii in range(n_chain):
-                popt_chain[ii,:], _ = curve_fit(multi_gaussian_diff_width, self.wvl_tofit,
+                popt_chain[ii,:], _ = curve_fit(self.multi_gaussian_diff_width, self.wvl_tofit,
                                             self.data_tofit+random_err[ii,:],p0=popt,sigma=err_hmc,
                                             absolute_sigma=absolute_sigma)
             
@@ -536,13 +425,13 @@ class SpectrumFitSingle:
             if self.same_width is True:
                 p_fit = np.concatenate((line_wvl_plot,int_total_plot,fwhm_plot,
                                         int_cont_plot),axis=None)
-                spec_fit = multi_gaussian_same_width(self.wvl_plot,*p_fit)
-                res_fit = self.data - multi_gaussian_same_width(self.wvl,*p_fit) 
+                spec_fit = self.multi_gaussian_same_width(self.wvl_plot,*p_fit)
+                res_fit = self.data - self.multi_gaussian_same_width(self.wvl,*p_fit) 
             else:
                 p_fit = np.concatenate((line_wvl_plot,int_total_plot,fwhm_plot,
                                         int_cont_plot),axis=None)
-                spec_fit = multi_gaussian_diff_width(self.wvl_plot,*p_fit) 
-                res_fit = self.data_tofit - multi_gaussian_diff_width(self.wvl_tofit,*p_fit)                           
+                spec_fit = self.multi_gaussian_diff_width(self.wvl_plot,*p_fit) 
+                res_fit = self.data_tofit - self.multi_gaussian_diff_width(self.wvl_tofit,*p_fit)                           
 
             ln2, = ax.plot(self.wvl_plot,spec_fit,color=colors[2],ls="-",label = r"$I_{\rm fit}$",lw=2,
                             zorder=16,alpha=0.7)
@@ -640,37 +529,196 @@ class SpectrumFitSingle:
 
         #plt.tight_layout()
 
+    def multi_gaussian_same_width(self,wvl,*args):
+        spec_syn = np.zeros_like(wvl)
 
-def multi_gaussian_same_width(wvl,*args):
-    line_number = (len(args)-2)//2
+        for ii in range(self.line_number):
+            spec_syn = spec_syn \
+                    + gaussian(wvl,line_wvl=args[ii], 
+                                int_total=args[ii + self.line_number], 
+                                fwhm=args[-2])
+            
+        spec_syn = spec_syn + args[-1]
 
-    spec_syn = np.zeros_like(wvl)
+        return spec_syn
 
-    for ii in range(line_number):
-        spec_syn = spec_syn \
+    def multi_gaussian_diff_width(self,wvl,*args):
+        spec_syn = np.zeros_like(wvl)
+
+        for ii in range(self.line_number):
+            spec_syn = spec_syn \
+                    + gaussian(wvl,line_wvl=args[ii], 
+                                int_total=args[ii + self.line_number], 
+                                fwhm=args[ii + self.line_number*2])
+            
+        spec_syn = spec_syn + args[-1]
+
+        return spec_syn
+    
+    def multi_gaussian_mixture_width(self,wvl,*args):
+        spec_syn = np.zeros_like(wvl)
+        fwhm_arg_index_cont = 0 
+
+        for ii in range(self.line_number):
+            if self.same_width[ii] is True:
+                spec_syn = spec_syn \
                    + gaussian(wvl,line_wvl=args[ii], 
-                              int_total=args[ii + line_number], 
+                              int_total=args[ii + self.line_number], 
                               fwhm=args[-2])
-        
-    spec_syn = spec_syn + args[-1]
-
-    return spec_syn
-
-def multi_gaussian_diff_width(wvl,*args):
-    line_number = (len(args)-1)//3
-
-    spec_syn = np.zeros_like(wvl)
-
-    for ii in range(line_number):
-        spec_syn = spec_syn \
+            else:
+                spec_syn = spec_syn \
                    + gaussian(wvl,line_wvl=args[ii], 
-                              int_total=args[ii + line_number], 
-                              fwhm=args[ii + line_number*2])
+                              int_total=args[ii + self.line_number], 
+                              fwhm=args[self.line_number*2+fwhm_arg_index_cont])
+
+                fwhm_arg_index_cont += 1
+
+        spec_syn = spec_syn + args[-1]
+        return spec_syn
+                
+class SpectrumFitRow:
+    '''
+        SpectrumFitRow fits spectral lines in a row. (e.g., along the slit of a slit-jaw
+        spectrograph)
+    '''
+    def __init__(self, data, wvl, line_number, line_wvl_init, int_max_init, \
+                fwhm_init, err=None, same_width=False, stray_light=False, \
+                stray_light_wvl_fixed=True, stray_wvl_init=None, \
+                stray_int_total=None, stray_fwhm=None):
+
+        '''
+            Initialize the SpectrumFitRow class
+            
+            Parameters
+            ----------
+        '''
         
-    spec_syn = spec_syn + args[-1]
+        #input parameters
+        self.data = data
+        self.wvl = wvl
+        self.line_number = line_number
+        self.line_wvl_init = np.array(line_wvl_init)
+        self.int_max_init = np.array(int_max_init)
+        self.fwhm_init = np.array(fwhm_init)
+        self.err = err
+        self.same_width = same_width
+        self.stray_light = stray_light
+        self.stray_light_wvl_fixed = stray_light_wvl_fixed
+        self.stray_wvl_init = stray_wvl_init
+        self.stray_int_total = stray_int_total
+        self.stray_fwhm = stray_fwhm
 
-    return spec_syn
+        #instance properties
+        self.shape = data.shape
+        self.wvl_plot = np.linspace(self.wvl[0],self.wvl[-1],101)
+        if len(data.shape) == 1:
+            self.frame_number = 1
+        else:
+            self.frame_number = self.shape[0]
 
+    
+        
+        #fitted parameters
+        self.line_wvl_fit = np.zeros((self.frame_number,self.line_number))
+        self.line_wvl_err = np.zeros((self.frame_number,self.line_number))
+
+        self.int_total_fit = np.zeros((self.frame_number,self.line_number))
+        self.int_total_err = np.zeros((self.frame_number,self.line_number))
+
+        if same_width is True:
+            self.fwhm_fit = np.zeros(self.frame_number)
+            self.fwhm_err = np.zeros(self.frame_number)
+        else:
+            self.fwhm_fit = np.zeros((self.frame_number,self.line_number))
+            self.fwhm_err = np.zeros((self.frame_number,self.line_number))
+
+        self.int_cont_fit = np.zeros(self.frame_number)
+        self.int_cont_err = np.zeros(self.frame_number)
+
+
+
+    def run_lse(self,ignore_err=False):
+        if self.stray_light is False:
+            popt = np.concatenate((self.line_wvl_init,
+                                   self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
+                                   self.fwhm_init,np.mean(self.data[0,:2])),axis = None)
+            
+            if (self.err is None) or (ignore_err is True):
+                if self.same_width is True:
+                    for ii in range(self.frame_number):
+                        popt, pcov = curve_fit(self.multi_gaussian_same_width, self.wvl, self.data[ii,:],
+                                            p0=popt)
+                        
+                        
+                        self.line_wvl_fit[ii,:] = popt[:self.line_number]
+                        self.int_total_fit[ii,:] = popt[self.line_number:self.line_number*2]
+                        self.fwhm_fit[ii] = popt[-2]
+                        self.int_cont_fit[ii] = popt[-1]
+
+                        perr = np.sqrt(np.diagonal(pcov))
+                        self.line_wvl_err[ii,:] = perr[:self.line_number]
+                        self.int_total_err[ii,:] = perr[self.line_number:self.line_number*2]
+                        self.fwhm_err[ii] = perr[-2]
+                        self.int_cont_err[ii] = perr[-1]
+                else:
+                    for ii in range(self.frame_number):
+                        popt, pcov = curve_fit(self.multi_gaussian_diff_width, self.wvl, self.data[ii,:],
+                                            p0=popt)
+                        
+                        self.line_wvl_fit[ii,:] = popt[:self.line_number]
+                        self.int_total_fit[ii,:] = popt[self.line_number:self.line_number*2]
+                        self.fwhm_fit[ii] = popt[self.line_number*2:self.line_number*3]
+                        self.int_cont_fit[ii] = popt[-1]
+
+                        perr = np.sqrt(np.diagonal(pcov))
+                        self.line_wvl_err[ii,:] = perr[:self.line_number]
+                        self.int_total_err[ii,:] = perr[self.line_number:self.line_number*2]
+                        self.fwhm_err[ii] = perr[self.line_number*2:self.line_number*3]
+                        self.int_cont_err[ii] = perr[-1]                  
+
+
+    
+    def plot_fit(self, plot_fit=True, mcmc=False):
+            nrows = int(np.ceil(self.frame_number/4.))
+            fig, axes = plt.subplots(nrows,4,figsize=(16,nrows*3))
+
+            for ii, ax_ in enumerate(axes.flatten()):
+                if ii < self.frame_number:
+                    if self.err is None:
+                        ln1, = ax_.step(self.wvl,self.data[ii,:],where="mid",color="#E87A90",label = r"$I_{\rm obs}$",lw=2)
+                    else:
+                        ln1 = ax_.errorbar(self.wvl,self.data[ii,:],yerr = self.err[ii,:],ds='steps-mid',color="#E87A90",capsize=2,
+                        label = r"$I_{\rm obs}$",lw=1.5)
+
+                    if plot_fit is True:
+                        if self.same_width is True:
+                            p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
+                                                    self.int_cont_fit[ii]),axis=None)
+                            spec_fit = self.multi_gaussian_same_width(self.wvl_plot,*p_fit)
+                        else:
+                            p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
+                                                    self.int_cont_fit[ii]),axis=None)
+                            spec_fit = self.multi_gaussian_diff_width(self.wvl_plot,*p_fit)                            
+
+                        ln2, = ax_.plot(self.wvl_plot,spec_fit,color="#FC9F40",ls="-",label = r"$I_{\rm fit}$",lw=1.5)
+
+                        if self.line_number > 1:
+                            if self.same_width is True:
+                                for jj in range(self.line_number):
+                                    line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
+                                                            self.int_total_fit[ii,jj], self.fwhm_fit[ii]) \
+                                                    + self.int_cont_fit[ii]
+                                    ax_.plot(self.wvl_plot,line_profile,color="#E9002D",ls="-",lw=1.5,alpha=0.7)
+                            else:
+                                for jj in range(self.line_number):
+                                    line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
+                                                            self.int_total_fit[ii,jj], self.fwhm_fit[ii,jj]) \
+                                                    + self.int_cont_fit[ii]
+                                    ax_.plot(self.wvl_plot,line_profile,color="#E9002D",ls="-",lw=1.5,alpha=0.7)                                
+                                    
+    def plot_width(self,hmc=False,mcmc=False):
+
+        pass 
 
 def gaussian(wvl,line_wvl,int_total,fwhm):
     line_profile = 2.355*int_total/np.sqrt(2.*np.pi)/fwhm \
@@ -678,7 +726,4 @@ def gaussian(wvl,line_wvl,int_total,fwhm):
 
     return line_profile
 
-
-#plt.plot(np.linspace(0,10,301),multi_gaussian_same_width(np.linspace(0,10,301),3,8,5,2,2,0.5))
-#plt.show()
 
