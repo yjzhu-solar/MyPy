@@ -117,7 +117,11 @@ class SpectrumFitSingle:
         self.int_total_fit = np.zeros(self.line_number)
         self.int_total_err = np.zeros(self.line_number)
 
-        if same_width is True:
+        if type(same_width) is list:
+            self.fwhm_fit = np.zeros(self.line_number)
+            self.fwhm_err = np.zeros(self.line_number)
+            self.line_same_width_index = np.where(self.same_width)[0]
+        elif same_width is True:
             self.fwhm_fit = np.float64(0.0)
             self.fwhm_err = np.float64(0.0)
         else:
@@ -157,9 +161,8 @@ class SpectrumFitSingle:
         '''
         if self.stray_light is False:
             if type(self.same_width) is list:
-                line_same_width_index = np.where(self.same_width)[0]
-                new_fwhm_init = np.concatenate((np.delete(self.fwhm_init,line_same_width_index),
-                                                np.average(self.fwhm_init[line_same_width_index])),
+                new_fwhm_init = np.concatenate((np.delete(self.fwhm_init,self.line_same_width_index),
+                                                np.average(self.fwhm_init[self.line_same_width_index])),
                                                 axis=None)
                 popt = np.concatenate((self.line_wvl_init,
                                     self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
@@ -245,7 +248,14 @@ class SpectrumFitSingle:
         '''
 
         self.run_lse(ignore_err=ignore_err,absolute_sigma=absolute_sigma)
-        if self.same_width is True:
+        if type(self.same_width) is list:
+            new_fwhm_fit = np.concatenate((np.delete(self.fwhm_fit,self.line_same_width_index),
+                                        np.average(self.fwhm_fit[self.line_same_width_index])),
+                                        axis=None)
+            p_fit = np.concatenate((self.line_wvl_fit,self.int_total_fit,new_fwhm_fit,
+                                    self.int_cont_fit),axis=None)
+            spec_fit = self.multi_gaussian_mixture_width(self.wvl_tofit,*p_fit)
+        elif self.same_width is True:
             p_fit = np.concatenate((self.line_wvl_fit,self.int_total_fit,self.fwhm_fit,
                                     self.int_cont_fit),axis=None)
             spec_fit = self.multi_gaussian_same_width(self.wvl_tofit,*p_fit)
@@ -274,7 +284,42 @@ class SpectrumFitSingle:
             err_hmc = None
         else:
             err_hmc = err_diff
-        if self.same_width is True:
+        if type(self.same_width) is list:
+            for ii in range(n_chain):
+                popt_chain[ii,:], _ = curve_fit(self.multi_gaussian_mixture_width, self.wvl_tofit,
+                                            self.data_tofit+random_err[ii,:],p0=popt,sigma=err_hmc,
+                                            absolute_sigma=absolute_sigma)
+            
+            popt_result = np.zeros_like(popt)
+            popt_err = np.zeros((2,popt.shape[0]))
+            for jj in range(popt.shape[0]):
+                mcmc_result = np.percentile(popt_chain[:, jj], [50-cred_lvl/2, 50, 50+cred_lvl/2])
+                residual = np.diff(mcmc_result)
+                popt_result[jj] = mcmc_result[1]
+                popt_err[:,jj] = np.array([residual[0],residual[1]])
+            
+            self.line_wvl_fit_hmc = popt_result[:self.line_number]
+            self.int_total_fit_hmc = popt_result[self.line_number:self.line_number*2]
+            self.int_cont_fit_hmc = popt_result[-1]
+
+            self.line_wvl_err_hmc = popt_err[:,:self.line_number]
+            self.int_total_err_hmc = popt_err[:,self.line_number:self.line_number*2]
+            self.int_cont_err_hmc = popt_err[:,-1]
+
+
+            self.fwhm_fit_hmc = np.zeros(self.line_number)
+            self.fwhm_err_hmc = np.zeros((2,self.line_number))
+            fwhm_arg_index_cont = 0 
+            for ii in range(self.line_number):
+                if self.same_width[ii] is True:
+                    self.fwhm_fit_hmc[ii] = popt_result[-2]
+                    self.fwhm_err_hmc[:,ii] = popt_err[:,-2]
+                else:
+                    self.fwhm_fit_hmc[ii] = popt_result[self.line_number*2+fwhm_arg_index_cont]
+                    self.fwhm_err_hmc[:,ii] = popt_err[:,self.line_number*2+fwhm_arg_index_cont]
+                    fwhm_arg_index_cont += 1
+
+        elif self.same_width is True:
             for ii in range(n_chain):
                 popt_chain[ii,:], _ = curve_fit(self.multi_gaussian_same_width, self.wvl_tofit,
                                             self.data_tofit+random_err[ii,:],p0=popt,sigma=err_hmc,
@@ -530,6 +575,19 @@ class SpectrumFitSingle:
         #plt.tight_layout()
 
     def multi_gaussian_same_width(self,wvl,*args):
+        '''
+        Generate the spectra which consists of multiple Gaussian spectral lines
+        with the same width. 
+
+        Parameters
+        ----------
+        wvl : 1-D array
+        Wavelength points of the spectra. 
+        *args : 
+        Parameters of the Gaussian profiles, which follows the order: 
+        wvl_line1, wvl_line2, ..., int_total_line1, int_total_line2, ...,
+        fwhm_all_line, int_cont 
+        '''
         spec_syn = np.zeros_like(wvl)
 
         for ii in range(self.line_number):
@@ -543,6 +601,19 @@ class SpectrumFitSingle:
         return spec_syn
 
     def multi_gaussian_diff_width(self,wvl,*args):
+        '''
+        Generate the spectra which consists of multiple Gaussian spectral lines
+        with different widths. 
+
+        Parameters
+        ----------
+        wvl : 1-D array
+        Wavelength points of the spectra. 
+        *args : 
+        Parameters of the Gaussian profiles, which follows the order: 
+        wvl_line1, wvl_line2, ..., int_total_line1, int_total_line2, ...,
+        fwhm_line1, fwhm_line2, ..., int_cont 
+        '''
         spec_syn = np.zeros_like(wvl)
 
         for ii in range(self.line_number):
@@ -556,6 +627,20 @@ class SpectrumFitSingle:
         return spec_syn
     
     def multi_gaussian_mixture_width(self,wvl,*args):
+        '''
+        Generate the spectra which consists of multiple Gaussian spectral lines,
+        some of which have the same widths (defined in self.same_width). 
+
+        Parameters
+        ----------
+        wvl : 1-D array
+        Wavelength points of the spectra. 
+        *args : 
+        Parameters of the Gaussian profiles, which follows the order: 
+        wvl_line1, wvl_line2, ..., int_total_line1, int_total_line2, ...,
+        fwhm_line_diff_width1, fwhm_line_diff_width2, ..., fwhm_line_same_width,
+        int_cont 
+        '''
         spec_syn = np.zeros_like(wvl)
         fwhm_arg_index_cont = 0 
 
