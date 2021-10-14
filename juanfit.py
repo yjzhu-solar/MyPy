@@ -370,7 +370,7 @@ class SpectrumFitSingle:
 
     
     def plot(self, plot_fit=True,plot_params=True, plot_mcmc=False,plot_hmc=False,
-                color_style="Warm",plot_title=None,xlabel=None,ylabel=None,xlim=None,
+                color_style="Red",plot_title=None,xlabel=None,ylabel=None,xlim=None,
                 save_fig=False,save_fname="./fit_result.pdf",save_fmt="pdf",save_dpi=300):
         '''
             Plot the input spectra and fitting results. 
@@ -388,14 +388,22 @@ class SpectrumFitSingle:
             Hahn et al. 2012, ApJ, 753, 36. Default is False. 
             xlim : [left limit, right_lim], optional 
             If provided, set the left and right limit of the x-axis. Default is None. 
-            color_style : {"Warm","Cold"}, optional
-            Color style of the plot. Default is "Warm".
+            color_style : {"Red","Yellow","Green","Blue","Purple"}, optional
+            Color style of the plot. Default is "Red".
             plot_title : string, optional 
             Set to be the title of the plot. Default is None.
             xlabel: string, optional 
             Set to be the label of the x-axis. Default is None.
             ylabel: string, optional 
             Set to be the label of the y-axis. Default is None. 
+            save_fig: bool, optional 
+            If True, save the plot to local directory. Default is False.
+            save_fname: string, optional 
+            The filename of the saved plot. Default is "./fit_result.pdf"
+            save_fmt: string, optional 
+            Format of the saved file, e.g., "pdf", "png", "svg"... Default is "pdf".
+            save_dpi: int, optional
+            Dots per inch (DPI) of the saved plot. Default is 300. 
 
         '''
         self.wvl_plot = np.linspace(self.wvl[0],self.wvl[-1],5*len(self.wvl))
@@ -426,10 +434,17 @@ class SpectrumFitSingle:
         #print("Width:",self.fwhm_fit)
         #print("Width Error:",self.fwhm_err)
 
-        if color_style == "Warm":
+        if color_style == "Red":
             colors = ["#E87A90","#FEDFE1","black","#E9002D","#DBD0D0"]
-        elif color_style == "Cold":
+        elif color_style == "Green":
             colors = ["#00896C","#A8D8B9","black","#33A6B8","#DBD0D0"]
+        elif color_style == "Yellow":
+            colors = ["#FFBA84","#FAD689","black","#FC9F4D","#DBD0D0"]
+        elif color_style == "Blue":
+            colors = ["#3A8FB7","#A5DEE4","black","#58B2DC","#DBD0D0"]
+        elif color_style == "Purple":
+            colors = ["#8F77B5","#B28FCE","black","#6A4C9C","#DBD0D0"]
+
 
         if self.err is None:
             ln1, = ax.step(self.wvl,self.data,where="mid",color=colors[0],label = r"$I_{\rm obs}$",lw=2,zorder=15)
@@ -495,13 +510,13 @@ class SpectrumFitSingle:
                         line_profile = gaussian(self.wvl_plot, line_wvl_plot[jj],
                                                 int_total_plot[jj], fwhm_plot) \
                                         + int_cont_plot
-                        ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.7)
+                        ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.8)
                 else:
                     for jj in range(self.line_number):
                         line_profile = gaussian(self.wvl_plot, line_wvl_plot[jj],
                                                 int_total_plot[jj], fwhm_plot[jj]) \
                                         + int_cont_plot
-                        ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.7)   
+                        ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.8)   
 
             if self.err is None:
                 ax_res.scatter(self.wvl_tofit,res_fit,marker="o",s=15,color=colors[3])
@@ -708,7 +723,7 @@ class SpectrumFitRow:
 
         #instance properties
         self.shape = data.shape
-        self.wvl_plot = np.linspace(self.wvl[0],self.wvl[-1],101)
+        self.wvl_plot = np.linspace(self.wvl[0],self.wvl[-1],5*len(self.wvl))
         if len(data.shape) == 1:
             self.frame_number = 1
         else:
@@ -739,7 +754,7 @@ class SpectrumFitRow:
             self.single_fit_list.append(SpectrumFitSingle(data=self.data[ii,:], wvl=self.wvl,
                                                 line_number=self.line_number,line_wvl_init=self.line_wvl_init,
                                                 int_max_init=self.int_max_init,fwhm_init=self.fwhm_init,
-                                                err=self.err,same_width=self.same_width,stray_light=self.stray_light,
+                                                err=self.err[ii,:],same_width=self.same_width,stray_light=self.stray_light,
                                                 stray_wvl_init=self.stray_wvl_init,stray_int_total=self.stray_int_total,
                                                 stray_fwhm=self.stray_fwhm,mask=self.mask))
         
@@ -751,34 +766,51 @@ class SpectrumFitRow:
             self.line_wvl_err[ii:,] = self.single_fit_list[ii].line_wvl_err
             self.int_total_fit[ii,:] = self.single_fit_list[ii].int_total_fit
             self.int_total_err[ii,:] = self.single_fit_list[ii].int_total_err
-            self.fwhm_fit[ii,:] = self.single_fit_list[ii].fwhm_fit
-            self.fwhm_err[ii,:] = self.single_fit_list[ii].fwhm_err
-            self.int_cont_fit[ii,:] = self.single_fit_list[ii].int_cont_fit
-            self.int_cont_err[ii,:] = self.single_fit_list[ii].int_cont_err
+            self.fwhm_fit[ii] = self.single_fit_list[ii].fwhm_fit
+            self.fwhm_err[ii] = self.single_fit_list[ii].fwhm_err
+            self.int_cont_fit[ii] = self.single_fit_list[ii].int_cont_fit
+            self.int_cont_err[ii] = self.single_fit_list[ii].int_cont_err
     
-    def plot_fit(self, plot_fit=True, mcmc=False):
+    def plot_fit(self, plot_fit=True, plot_hmc=False,plot_mcmc=False,
+                color_style="Red",plot_title=None,xlabel=None,ylabel=None,xlim=None,
+                save_fig=False,save_fname="./fit_row_result.pdf",save_fmt="pdf",save_dpi=300):
             nrows = int(np.ceil(self.frame_number/4.))
-            fig, axes = plt.subplots(nrows,4,figsize=(16,nrows*3))
+            fig, axes = plt.subplots(nrows,4,figsize=(16,nrows*3),constrained_layout=True)
+
+            if color_style == "Red":
+                colors = ["#E87A90","#FEDFE1","black","#E9002D","#DBD0D0"]
+            elif color_style == "Green":
+                colors = ["#00896C","#A8D8B9","black","#33A6B8","#DBD0D0"]
+            elif color_style == "Yellow":
+                colors = ["#FFBA84","#FAD689","black","#FC9F4D","#DBD0D0"]
+            elif color_style == "Blue":
+                colors = ["#3A8FB7","#A5DEE4","black","#58B2DC","#DBD0D0"]
+            elif color_style == "Purple":
+                colors = ["#8F77B5","#B28FCE","black","#6A4C9C","#DBD0D0"]
 
             for ii, ax_ in enumerate(axes.flatten()):
                 if ii < self.frame_number:
                     if self.err is None:
-                        ln1, = ax_.step(self.wvl,self.data[ii,:],where="mid",color="#E87A90",label = r"$I_{\rm obs}$",lw=2)
+                        ln1, = ax_.step(self.wvl,self.data[ii],where="mid",color=colors[0],label = r"$I_{\rm obs}$",lw=2)
                     else:
-                        ln1 = ax_.errorbar(self.wvl,self.data[ii,:],yerr = self.err[ii,:],ds='steps-mid',color="#E87A90",capsize=2,
+                        ln1 = ax_.errorbar(self.wvl,self.data[ii],yerr = self.err[ii],ds='steps-mid',color=colors[0],capsize=2,
                         label = r"$I_{\rm obs}$",lw=1.5)
+                    
+                    ax_.fill_between(self.wvl,np.ones_like(self.wvl)*np.min(self.data[ii]),self.data[ii],
+                        step='mid',color=colors[1],alpha=0.6)
 
                     if plot_fit is True:
                         if self.same_width is True:
                             p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
                                                     self.int_cont_fit[ii]),axis=None)
-                            spec_fit = self.multi_gaussian_same_width(self.wvl_plot,*p_fit)
+                            spec_fit = self.single_fit_list[ii].multi_gaussian_same_width(self.wvl_plot,*p_fit)
                         else:
                             p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
                                                     self.int_cont_fit[ii]),axis=None)
-                            spec_fit = self.multi_gaussian_diff_width(self.wvl_plot,*p_fit)                            
+                            spec_fit = self.single_fit_list[ii].multi_gaussian_diff_width(self.wvl_plot,*p_fit)                            
 
-                        ln2, = ax_.plot(self.wvl_plot,spec_fit,color="#FC9F40",ls="-",label = r"$I_{\rm fit}$",lw=1.5)
+                        ln2, = ax_.plot(self.wvl_plot,spec_fit,color=colors[2],ls="-",label = r"$I_{\rm fit}$",lw=1.5,
+                        zorder=16,alpha=0.7)
 
                         if self.line_number > 1:
                             if self.same_width is True:
@@ -786,20 +818,97 @@ class SpectrumFitRow:
                                     line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
                                                             self.int_total_fit[ii,jj], self.fwhm_fit[ii]) \
                                                     + self.int_cont_fit[ii]
-                                    ax_.plot(self.wvl_plot,line_profile,color="#E9002D",ls="-",lw=1.5,alpha=0.7)
+                                    ax_.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=1.5,alpha=0.7)
                             else:
                                 for jj in range(self.line_number):
                                     line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
                                                             self.int_total_fit[ii,jj], self.fwhm_fit[ii,jj]) \
                                                     + self.int_cont_fit[ii]
-                                    ax_.plot(self.wvl_plot,line_profile,color="#E9002D",ls="-",lw=1.5,alpha=0.7)     
+                                    ax_.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=1.5,alpha=0.7)   
+                    ax_.tick_params(which="major",length=4,direction="in")
+                    if xlim is not None:
+                        ax_.set_xlim(xlim)  
+                else:
+                    ax_.axis("off")
+            for ii in range(-4-(4*nrows-self.frame_number),0-(4*nrows-self.frame_number)):
+                if xlabel is None:
+                    axes.flatten()[ii].set_xlabel(r"$\textrm{Wavelength}$",fontsize=12)
+                else:
+                    axes.flatten()[ii].set_xlabel(xlabel,fontsize=12)
+            if nrows == 1:
+                if ylabel is None:
+                    axes[0].set_ylabel("Intensity",fontsize=12)
+                else:
+                    axes[0].set_ylabel(ylabel,fontsize=12)
+            else:
+                if ylabel is None:
+                    for ii in range(nrows):
+                        axes[ii,0].set_ylabel("Intensity",fontsize=12)
+                else:
+                    for ii in range(nrows):
+                        axes[ii,0].set_ylabel(ylabel,fontsize=12)
+            if save_fig is True:
+                plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
 
-    def plot_single(self,frame_index,*args):
-        self.single_fit_list[frame_index].plot(*args)
+    def plot_single(self,frame_index,*args,**kwargs):
+        self.single_fit_list[frame_index].plot(*args,**kwargs)
                                     
-    def plot_width(self,hmc=False,mcmc=False):
+    def plot_variation(self,var="fwhm",plot_hmc=False,plot_mcmc=False,
+                        xdata=None,xlabel=None,ylabel=None,xlim=None,
+                        line_label=None):
+        
+        if xdata is None:
+            xdata = np.arange(self.frame_number)
 
-        pass 
+        if ylabel is None:
+            if var == "fwhm":
+                ylabel = r"FWHM $\Delta \lambda$"
+            if var == "int":
+                ylabel = r"Total Intensity $I_0$"
+            if var == "wvl":
+                ylabel = r"Line Core Wavelength $\lambda_0$" 
+        
+        if line_label is None:
+            line_label = []
+            for ii in range(self.line_number):
+                line_label.append("{:.1f}".format(self.line_wvl_fit[0,ii]))
+        
+        if var == "fwhm":
+            if plot_hmc:
+                pass
+            elif plot_mcmc:
+                pass
+            else:
+                ydata = self.fwhm_fit
+                yerr = self.fwhm_err
+        elif var == "int":
+            if plot_hmc:
+                pass
+            elif plot_mcmc:
+                pass
+            else:
+                ydata = self.int_total_fit
+                yerr = self.int_total_err
+        elif var == "wvl":  
+            if plot_hmc:
+                pass
+            elif plot_mcmc:
+                pass
+            else:
+                ydata = self.line_wvl_fit
+                yerr = self.line_wvl_err
+        fig, ax = plt.subplots(figsize=(8,6),constrained_layout=True)
+
+        if (self.same_width is True) or (self.line_number == 1):
+            ax.errorbar(xdata,ydata,yerr=yerr,lw=2,capsize=3,marker="o",markersize=5)
+        else:
+            for ii in range(self.line_number):
+                ax.errorbar(xdata,ydata[:,ii],yerr=yerr[:,ii],lw=2,capsize=3,marker="o",markersize=5,
+                            label=line_label[ii])
+
+        ax.tick_params(labelsize=18,direction="in")
+        ax.set_ylabel(ylabel,fontsize=18)
+        ax.legend(fontsize=18,frameon=False)
 
 def gaussian(wvl,line_wvl,int_total,fwhm):
     line_profile = 2.355*int_total/np.sqrt(2.*np.pi)/fwhm \
