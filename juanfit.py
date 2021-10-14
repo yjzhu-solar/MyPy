@@ -370,7 +370,8 @@ class SpectrumFitSingle:
 
     
     def plot(self, plot_fit=True,plot_params=True, plot_mcmc=False,plot_hmc=False,
-                color_style="Warm",plot_title=None,xlabel=None,ylabel=None,xlim=None):
+                color_style="Warm",plot_title=None,xlabel=None,ylabel=None,xlim=None,
+                save_fig=False,save_fname="./fit_result.pdf",save_fmt="pdf",save_dpi=300):
         '''
             Plot the input spectra and fitting results. 
 
@@ -399,9 +400,11 @@ class SpectrumFitSingle:
         '''
         self.wvl_plot = np.linspace(self.wvl[0],self.wvl[-1],5*len(self.wvl))
         if plot_fit is True:
-            fig = plt.subplots(figsize=(8,10))
-            ax = plt.subplot2grid((8,1),(0,0),rowspan = 5,colspan = 1)
-            ax_res = plt.subplot2grid((8,1),(6,0),rowspan = 2,colspan = 1)
+            fig = plt.subplots(figsize=(8+3*np.ceil(self.line_number/2),10))
+            ax = plt.subplot2grid((8,8+3*np.ceil(self.line_number/2).astype("int")),(0,0),
+                                    rowspan = 5,colspan = 8)
+            ax_res = plt.subplot2grid((8,8+3*np.ceil(self.line_number/2).astype("int")),(6,0),
+                                    rowspan = 2,colspan = 8)
         else:
             fig, ax = plt.subplots(figsize=(8,6))
         ax.tick_params(which="both",labelsize=18,right=True,top=True)
@@ -529,50 +532,57 @@ class SpectrumFitSingle:
         if (plot_params and plot_fit) is True:
             if plot_mcmc or plot_hmc:
                 for ii in range(self.line_number):
-                    ax.text(1.05+(ii//2)*0.5,0.9-(ii%2)*0.5,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
-                    num2tex(int_total_err_plot[0,ii]),num2tex(int_total_err_plot[1,ii])),ha = 'left',va = 'center', 
-                    color = 'black',fontsize = 18,linespacing=1.5,transform=ax.transAxes)
+                    ax_text = plt.subplot2grid((16,8+3*np.ceil(self.line_number/2).astype("int")),
+                                        (ii%2*5,8+3*np.floor_divide(ii,2).astype("int")),
+                                    rowspan = 5,colspan = 3)
+                    ax_text.axis("off")
 
-                    ax.text(1.05+(ii//2)*0.5,0.8-(ii%2)*0.5,line_wvl_text_fmt.format(line_wvl_plot[ii],
-                    line_wvl_err_plot[0,ii],line_wvl_err_plot[1,ii]),ha = 'left',va = 'center', 
-                    color = 'black',fontsize = 18,linespacing=1.5,transform=ax.transAxes)
+                    ax_text.text(0.05,0.9,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
+                    num2tex(int_total_err_plot[0,ii]),num2tex(int_total_err_plot[1,ii])),ha = 'left',va = 'top', 
+                    color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+
+                    ax_text.text(0.05,0.67,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
+                    num2tex(line_wvl_err_plot[0,ii]),num2tex(line_wvl_err_plot[1,ii])),ha = 'left',va = 'top', 
+                    color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
 
                     if self.same_width is True:
-                        ax.text(1.05+(ii//2)*0.5,0.7-(ii%2)*0.5,fwhm_text_fmt.format(fwhm_plot,
-                        fwhm_err_plot[0],fwhm_err_plot[1]),ha = 'left',va = 'center', 
-                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax.transAxes)
+                        ax.text(0.05,0.44,fwhm_text_fmt.format(num2tex(fwhm_plot),
+                        num2tex(fwhm_err_plot[0]),num2tex(fwhm_err_plot[1])),ha = 'left',va = 'top', 
+                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                     else:
-                        ax.text(1.05+(ii//2)*0.5,0.7-(ii%2)*0.5,fwhm_text_fmt.format(fwhm_plot[ii],
-                        fwhm_err_plot[0,ii],fwhm_err_plot[1,ii]),ha = 'left',va = 'center', 
-                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax.transAxes)
+                        ax.text(0.05,0.44,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
+                        num2tex(fwhm_err_plot[0,ii]),num2tex(fwhm_err_plot[1,ii])),ha = 'left',va = 'top', 
+                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                     
-                    ax.text(1.05+(ii//2)*0.5,0.6-(ii%2)*0.5,int_cont_text_fmt.format(num2tex(int_cont_plot),
-                        num2tex(int_cont_err_plot[0]),num2tex(int_cont_err_plot[1])),ha = 'left',va = 'center', 
-                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax.transAxes) 
+                    ax.text(0.05,0.21,int_cont_text_fmt.format(num2tex(int_cont_plot),
+                        num2tex(int_cont_err_plot[0]),num2tex(int_cont_err_plot[1])),ha = 'left',va = 'top', 
+                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes) 
             else:
                 for ii in range(self.line_number):
                     ax.text(1.05+(ii//2)*0.5,0.9-(ii%2)*0.5,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
                     num2tex(int_total_err_plot[ii])),ha = 'left',va = 'center', 
                     color = 'black',fontsize = 18,linespacing=1.5,transform=ax.transAxes)
 
-                    ax.text(1.05+(ii//2)*0.5,0.8-(ii%2)*0.5,line_wvl_text_fmt.format(line_wvl_plot[ii],
-                    line_wvl_err_plot[ii]),ha = 'left',va = 'center', 
+                    ax.text(1.05+(ii//2)*0.5,0.8-(ii%2)*0.5,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
+                    num2tex(line_wvl_err_plot[ii])),ha = 'left',va = 'center', 
                     color = 'black',fontsize = 18,linespacing=1.5,transform=ax.transAxes)
 
                     if self.same_width is True:
-                        ax.text(1.05+(ii//2)*0.5,0.7-(ii%2)*0.5,fwhm_text_fmt.format(fwhm_plot,
-                        fwhm_err_plot),ha = 'left',va = 'center', 
+                        ax.text(1.05+(ii//2)*0.5,0.7-(ii%2)*0.5,fwhm_text_fmt.format(num2tex(fwhm_plot),
+                        num2tex(fwhm_err_plot)),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax.transAxes)
                     else:
-                        ax.text(1.05+(ii//2)*0.5,0.7-(ii%2)*0.5,fwhm_text_fmt.format(fwhm_plot[ii],
-                        fwhm_err_plot[ii]),ha = 'left',va = 'center', 
+                        ax.text(1.05+(ii//2)*0.5,0.7-(ii%2)*0.5,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
+                        num2tex(fwhm_err_plot[ii])),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax.transAxes)
                     
                     ax.text(1.05+(ii//2)*0.5,0.6-(ii%2)*0.5,int_cont_text_fmt.format(num2tex(int_cont_plot),
                         num2tex(int_cont_err_plot)),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax.transAxes)
 
-        #plt.tight_layout()
+        if save_fig is True:
+            #plt.tight_layout()
+            plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
 
     def multi_gaussian_same_width(self,wvl,*args):
         '''
