@@ -25,6 +25,7 @@ import emcee
 from scipy.special import wofz
 from scipy.optimize import curve_fit
 from num2tex import num2tex
+from warnings import warn
 
 #plot setting 
 from matplotlib import rcParams
@@ -176,6 +177,10 @@ class SpectrumFitSingle:
                 err_lse = None
             else:
                 err_lse = self.err_tofit 
+
+            if (err_lse is None) and (absolute_sigma is True):
+                absolute_sigma = False
+                warn("No input errors, absolute_sigma=False will be used in the Chi2 fitting.")
             if type(self.same_width) is list:
                 popt, pcov = curve_fit(self.multi_gaussian_mixture_width, self.wvl_tofit, self.data_tofit,
                                     p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma) 
@@ -704,6 +709,39 @@ class SpectrumFitRow:
             
             Parameters
             ----------
+            data : 1-D array
+                Input 1-D spectra (intensity) to fit.
+            wvl : 1-D array
+                1-D wavelength grid of the spectra.
+            line_number: integer
+                The desired number of lines to fit.
+            line_wvl_init : scalar or 1-D array
+                Initial wavelength(s) of the spectral line core(s).
+            int_max_init : scalar or 1-D array
+                Initial value(s) of the peak intensity.
+            fwhm_init : scalar or 1-D array
+                Initial value(s) of the full width at half maximum (FWHM).
+            err : 1-D array , optional 
+                Errors in the intensity at different wavelengths. If provided,
+                will be used to calculate the likelihood function. Default is None.
+            same_width : bool or a list of bool, optional 
+                If True, forces the fitted spectral lines have the same width. If provided 
+                as a list of bools, only forces the spectral lines corresponding to True value
+                have the same width in the fitting. Default is False.
+            stray_light : bool, optional 
+                If True, adds the stray light profile to the fitting. Default is False.
+            stray_wvl_init : scalar or 1-D array, optional
+                Initial wavelength(s) of the stray light line core(s). Default is None.
+            stray_int_total: scalar or 1-D array, optional 
+                Integrated intensity of the stray light profile(s). Default is None.
+            stray_fwhm: scalar or 1-D array, optional 
+                Full width at half maximum (FWHM) of the stray light profile(s).
+                Default is None. 
+            mask: [N,2] array, optional 
+                If provided, will mask the data between the N intervals in the fitting. 
+                For example, [[2,4],[10,12]] will mask the data points within [2,4] and 
+                [10,12]. Default is None.  
+
         '''
         
         #input parameters
@@ -760,6 +798,18 @@ class SpectrumFitRow:
         
 
     def run_lse(self,ignore_err=False,absolute_sigma=True):
+        '''
+            Performs least square estimation (Chi square fitting)
+            to the spectral line(s).
+
+            Parameters
+            ----------
+            ignore_err : bool, optional
+            If True, ignores the input error. Default is False. 
+            absolute_sigma: bool, optional
+            If True, the errors have the same unit as data. Default is True.  
+        '''
+
         for ii in range(self.frame_number):
             self.single_fit_list[ii].run_lse(ignore_err=ignore_err,absolute_sigma=absolute_sigma)
             self.line_wvl_fit[ii:,] = self.single_fit_list[ii].line_wvl_fit
@@ -774,81 +824,118 @@ class SpectrumFitRow:
     def plot_fit(self, plot_fit=True, plot_hmc=False,plot_mcmc=False,
                 color_style="Red",plot_title=None,xlabel=None,ylabel=None,xlim=None,
                 save_fig=False,save_fname="./fit_row_result.pdf",save_fmt="pdf",save_dpi=300):
-            nrows = int(np.ceil(self.frame_number/4.))
-            fig, axes = plt.subplots(nrows,4,figsize=(16,nrows*3),constrained_layout=True)
 
-            if color_style == "Red":
-                colors = ["#E87A90","#FEDFE1","black","#E9002D","#DBD0D0"]
-            elif color_style == "Green":
-                colors = ["#00896C","#A8D8B9","black","#33A6B8","#DBD0D0"]
-            elif color_style == "Yellow":
-                colors = ["#FFBA84","#FAD689","black","#FC9F4D","#DBD0D0"]
-            elif color_style == "Blue":
-                colors = ["#3A8FB7","#A5DEE4","black","#58B2DC","#DBD0D0"]
-            elif color_style == "Purple":
-                colors = ["#8F77B5","#B28FCE","black","#6A4C9C","#DBD0D0"]
+        '''
+            Plot the input spectra and fitting results of all the points
 
-            for ii, ax_ in enumerate(axes.flatten()):
-                if ii < self.frame_number:
-                    if self.err is None:
-                        ln1, = ax_.step(self.wvl,self.data[ii],where="mid",color=colors[0],label = r"$I_{\rm obs}$",lw=2)
+            Parameters
+            ----------
+            plot_fit : bool, optional
+            If True, plots the fitting results as well. Default is True.
+            plot_params : bool, optional 
+            If True, plot the fitted parameters by the figure. Default is True. 
+            plot_mcmc : bool, optional 
+            If True, plots the MCMC results. Default is False.
+            plot_hmc: bool, optional 
+            If True, plots the Monte Carlo fitting results using the method described in 
+            Hahn et al. 2012, ApJ, 753, 36. Default is False. 
+            xlim : [left limit, right_lim], optional 
+            If provided, set the left and right limit of the x-axis. Default is None. 
+            color_style : {"Red","Yellow","Green","Blue","Purple"}, optional
+            Color style of the plot. Default is "Red".
+            plot_title : string, optional 
+            Set to be the title of the plot. Default is None.
+            xlabel: string, optional 
+            Set to be the label of the x-axis. Default is None.
+            ylabel: string, optional 
+            Set to be the label of the y-axis. Default is None. 
+            save_fig: bool, optional 
+            If True, save the plot to local directory. Default is False.
+            save_fname: string, optional 
+            The filename of the saved plot. Default is "./fit_result.pdf"
+            save_fmt: string, optional 
+            Format of the saved file, e.g., "pdf", "png", "svg"... Default is "pdf".
+            save_dpi: int, optional
+            Dots per inch (DPI) of the saved plot. Default is 300. 
+
+        '''
+
+    
+        nrows = int(np.ceil(self.frame_number/4.))
+        fig, axes = plt.subplots(nrows,4,figsize=(16,nrows*3),constrained_layout=True)
+
+        if color_style == "Red":
+            colors = ["#E87A90","#FEDFE1","black","#E9002D","#DBD0D0"]
+        elif color_style == "Green":
+            colors = ["#00896C","#A8D8B9","black","#33A6B8","#DBD0D0"]
+        elif color_style == "Yellow":
+            colors = ["#FFBA84","#FAD689","black","#FC9F4D","#DBD0D0"]
+        elif color_style == "Blue":
+            colors = ["#3A8FB7","#A5DEE4","black","#58B2DC","#DBD0D0"]
+        elif color_style == "Purple":
+            colors = ["#8F77B5","#B28FCE","black","#6A4C9C","#DBD0D0"]
+
+        for ii, ax_ in enumerate(axes.flatten()):
+            if ii < self.frame_number:
+                if self.err is None:
+                    ln1, = ax_.step(self.wvl,self.data[ii],where="mid",color=colors[0],label = r"$I_{\rm obs}$",lw=2)
+                else:
+                    ln1 = ax_.errorbar(self.wvl,self.data[ii],yerr = self.err[ii],ds='steps-mid',color=colors[0],capsize=2,
+                    label = r"$I_{\rm obs}$",lw=1.5)
+                
+                ax_.fill_between(self.wvl,np.ones_like(self.wvl)*np.min(self.data[ii]),self.data[ii],
+                    step='mid',color=colors[1],alpha=0.6)
+
+                if plot_fit is True:
+                    if self.same_width is True:
+                        p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
+                                                self.int_cont_fit[ii]),axis=None)
+                        spec_fit = self.single_fit_list[ii].multi_gaussian_same_width(self.wvl_plot,*p_fit)
                     else:
-                        ln1 = ax_.errorbar(self.wvl,self.data[ii],yerr = self.err[ii],ds='steps-mid',color=colors[0],capsize=2,
-                        label = r"$I_{\rm obs}$",lw=1.5)
-                    
-                    ax_.fill_between(self.wvl,np.ones_like(self.wvl)*np.min(self.data[ii]),self.data[ii],
-                        step='mid',color=colors[1],alpha=0.6)
+                        p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
+                                                self.int_cont_fit[ii]),axis=None)
+                        spec_fit = self.single_fit_list[ii].multi_gaussian_diff_width(self.wvl_plot,*p_fit)                            
 
-                    if plot_fit is True:
+                    ln2, = ax_.plot(self.wvl_plot,spec_fit,color=colors[2],ls="-",label = r"$I_{\rm fit}$",lw=1.5,
+                    zorder=16,alpha=0.7)
+
+                    if self.line_number > 1:
                         if self.same_width is True:
-                            p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
-                                                    self.int_cont_fit[ii]),axis=None)
-                            spec_fit = self.single_fit_list[ii].multi_gaussian_same_width(self.wvl_plot,*p_fit)
+                            for jj in range(self.line_number):
+                                line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
+                                                        self.int_total_fit[ii,jj], self.fwhm_fit[ii]) \
+                                                + self.int_cont_fit[ii]
+                                ax_.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=1.5,alpha=0.7)
                         else:
-                            p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
-                                                    self.int_cont_fit[ii]),axis=None)
-                            spec_fit = self.single_fit_list[ii].multi_gaussian_diff_width(self.wvl_plot,*p_fit)                            
-
-                        ln2, = ax_.plot(self.wvl_plot,spec_fit,color=colors[2],ls="-",label = r"$I_{\rm fit}$",lw=1.5,
-                        zorder=16,alpha=0.7)
-
-                        if self.line_number > 1:
-                            if self.same_width is True:
-                                for jj in range(self.line_number):
-                                    line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
-                                                            self.int_total_fit[ii,jj], self.fwhm_fit[ii]) \
-                                                    + self.int_cont_fit[ii]
-                                    ax_.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=1.5,alpha=0.7)
-                            else:
-                                for jj in range(self.line_number):
-                                    line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
-                                                            self.int_total_fit[ii,jj], self.fwhm_fit[ii,jj]) \
-                                                    + self.int_cont_fit[ii]
-                                    ax_.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=1.5,alpha=0.7)   
-                    ax_.tick_params(which="major",length=4,direction="in")
-                    if xlim is not None:
-                        ax_.set_xlim(xlim)  
-                else:
-                    ax_.axis("off")
-            for ii in range(-4-(4*nrows-self.frame_number),0-(4*nrows-self.frame_number)):
-                if xlabel is None:
-                    axes.flatten()[ii].set_xlabel(r"$\textrm{Wavelength}$",fontsize=12)
-                else:
-                    axes.flatten()[ii].set_xlabel(xlabel,fontsize=12)
-            if nrows == 1:
-                if ylabel is None:
-                    axes[0].set_ylabel("Intensity",fontsize=12)
-                else:
-                    axes[0].set_ylabel(ylabel,fontsize=12)
+                            for jj in range(self.line_number):
+                                line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
+                                                        self.int_total_fit[ii,jj], self.fwhm_fit[ii,jj]) \
+                                                + self.int_cont_fit[ii]
+                                ax_.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=1.5,alpha=0.7)   
+                ax_.tick_params(which="major",length=4,direction="in")
+                if xlim is not None:
+                    ax_.set_xlim(xlim)  
             else:
-                if ylabel is None:
-                    for ii in range(nrows):
-                        axes[ii,0].set_ylabel("Intensity",fontsize=12)
-                else:
-                    for ii in range(nrows):
-                        axes[ii,0].set_ylabel(ylabel,fontsize=12)
-            if save_fig is True:
-                plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
+                ax_.axis("off")
+        for ii in range(-4-(4*nrows-self.frame_number),0-(4*nrows-self.frame_number)):
+            if xlabel is None:
+                axes.flatten()[ii].set_xlabel(r"$\textrm{Wavelength}$",fontsize=12)
+            else:
+                axes.flatten()[ii].set_xlabel(xlabel,fontsize=12)
+        if nrows == 1:
+            if ylabel is None:
+                axes[0].set_ylabel("Intensity",fontsize=12)
+            else:
+                axes[0].set_ylabel(ylabel,fontsize=12)
+        else:
+            if ylabel is None:
+                for ii in range(nrows):
+                    axes[ii,0].set_ylabel("Intensity",fontsize=12)
+            else:
+                for ii in range(nrows):
+                    axes[ii,0].set_ylabel(ylabel,fontsize=12)
+        if save_fig is True:
+            plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
 
     def plot_single(self,frame_index,*args,**kwargs):
         self.single_fit_list[frame_index].plot(*args,**kwargs)
