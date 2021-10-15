@@ -48,7 +48,7 @@ class SpectrumFitSingle:
         to the input spectra.
     '''
     def __init__(self, data, wvl, line_number, line_wvl_init, int_max_init, \
-                fwhm_init, err=None, same_width=False, stray_light=False, \
+                fwhm_init, err=None,err_percent=None, same_width=False, stray_light=False, \
                 stray_wvl_init=None, stray_int_total=None, stray_fwhm=None, \
                 mask=None):
 
@@ -72,6 +72,9 @@ class SpectrumFitSingle:
             err : 1-D array , optional 
                 Errors in the intensity at different wavelengths. If provided,
                 will be used to calculate the likelihood function. Default is None.
+            err_percent : scalar or 1-D array, optional 
+                If provided, multiply this percentage to the data to create the errors used 
+                in fittings. Conflict with the err parameter. Default is None. 
             same_width : bool or a list of bool, optional 
                 If True, forces the fitted spectral lines have the same width. If provided 
                 as a list of bools, only forces the spectral lines corresponding to True value
@@ -100,7 +103,14 @@ class SpectrumFitSingle:
         self.line_wvl_init = np.array(line_wvl_init)
         self.int_max_init = np.array(int_max_init)
         self.fwhm_init = np.array(fwhm_init)
-        self.err = err
+        if err_percent is None:
+            self.err = err
+        else:
+            if err is None:
+                self.err = self.data*err_percent
+            else:
+                warn("Both the err and err_percent parameters are used. Use err instead of err_percent.")
+                self.err = err
         self.same_width = same_width
         self.stray_light = stray_light
         self.stray_wvl_init = stray_wvl_init
