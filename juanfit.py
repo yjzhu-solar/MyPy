@@ -72,7 +72,7 @@ class SpectrumFitSingle:
             err : 1-D array , optional 
                 Errors in the intensity at different wavelengths. If provided,
                 will be used to calculate the likelihood function. Default is None.
-            err_percent : scalar or 1-D array, optional 
+            err_percent : scalar or 1-D array (0-100), optional 
                 If provided, multiply this percentage to the data to create the errors used 
                 in fittings. Conflict with the err parameter. Default is None. 
             same_width : bool or a list of bool, optional 
@@ -107,7 +107,7 @@ class SpectrumFitSingle:
             self.err = err
         else:
             if err is None:
-                self.err = self.data*err_percent
+                self.err = self.data*err_percent/100
             else:
                 warn("Both the err and err_percent parameters are used. Use err instead of err_percent.")
                 self.err = err
