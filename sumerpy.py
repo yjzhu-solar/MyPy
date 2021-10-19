@@ -92,8 +92,6 @@ def con_width_funct_4(slit, wavelength, order,fwhm_out, FWHM=True,
                     print("You are outside the available FWHM range.")
                 
                 width = np.concatenate((width,width_i),axis=None)
-
-                print(width)
     
     else:
         wave = 1300
