@@ -118,12 +118,13 @@ class SpectrumFitSingle:
         self.stray_fwhm = stray_fwhm
         #instance properties
         self.shape = data.shape
-        
+        self.custom_func = custom_func
+        self.custom_init = custom_init
 
         #If the custom fitting function is not provided, read the initial 
         #values for the embedded multi-gaussian functions. And create the 
         #Chi2 fitted parameters.
-        if custom_func is None:
+        if self.custom_func is None:
             self.line_number = line_number
             self.line_wvl_init = np.array(line_wvl_init)
             self.int_max_init = np.array(int_max_init)
@@ -151,8 +152,6 @@ class SpectrumFitSingle:
             self.int_cont_fit = np.float64(0.0)
             self.int_cont_err = np.float64(0.0)
         else:
-            self.custom_func = custom_func
-            self.custom_init = custom_init
             self.custom_fit = np.zeros_like(custom_init)
             self.custom_err = np.zeros_like(custom_init)
         
