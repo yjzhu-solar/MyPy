@@ -536,12 +536,12 @@ class SpectrumFitSingle:
 
             if self.custom_func is not None:
                 spec_fit = self.custom_func(self.wvl_plot,*self.custom_fit)
-                res_fit = self.data - self.custom_func(self.wvl,*self.custom_fit)                
+                res_fit = self.data_tofit - self.custom_func(self.wvl_tofit,*self.custom_fit)                
             elif self.same_width is True:
                 p_fit = np.concatenate((line_wvl_plot,int_total_plot,fwhm_plot,
                                         int_cont_plot),axis=None)
                 spec_fit = self.multi_gaussian_same_width(self.wvl_plot,*p_fit)
-                res_fit = self.data - self.multi_gaussian_same_width(self.wvl,*p_fit) 
+                res_fit = self.data_tofit - self.multi_gaussian_same_width(self.wvl_tofit,*p_fit) 
             else:
                 p_fit = np.concatenate((line_wvl_plot,int_total_plot,fwhm_plot,
                                         int_cont_plot),axis=None)
