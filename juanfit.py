@@ -992,9 +992,12 @@ class SpectrumFitRow:
                     axes[ii,0].set_ylabel(ylabel,fontsize=12)
         if save_fig is True:
             plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
+        
+        return axes
 
     def plot_single(self,frame_index,*args,**kwargs):
-        self.single_fit_list[frame_index].plot(*args,**kwargs)
+        ax = self.single_fit_list[frame_index].plot(*args,**kwargs)
+        return ax
                                     
     def plot_variation(self,var="fwhm",plot_hmc=False,plot_mcmc=False,
                         xdata=None,xlabel=None,ylabel=None,xlim=None,
@@ -1052,6 +1055,7 @@ class SpectrumFitRow:
         ax.tick_params(labelsize=18,direction="in")
         ax.set_ylabel(ylabel,fontsize=18)
         ax.legend(fontsize=18,frameon=False)
+        return ax 
 
 def gaussian(wvl,line_wvl,int_total,fwhm):
     line_profile = 2.355*int_total/np.sqrt(2.*np.pi)/fwhm \
