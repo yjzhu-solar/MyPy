@@ -833,13 +833,24 @@ class SpectrumFitRow:
 
         #create single fit object
         self.single_fit_list = []
-        for ii in range(self.frame_number):
-            self.single_fit_list.append(SpectrumFitSingle(data=self.data[ii,:], wvl=self.wvl,
-                                                line_number=self.line_number,line_wvl_init=self.line_wvl_init,
-                                                int_max_init=self.int_max_init,fwhm_init=self.fwhm_init,
-                                                err=self.err[ii,:],same_width=self.same_width,stray_light=self.stray_light,
-                                                stray_wvl_init=self.stray_wvl_init,stray_int_total=self.stray_int_total,
-                                                stray_fwhm=self.stray_fwhm,mask=self.mask))
+        if self.err is None:
+            for ii in range(self.frame_number):
+                self.single_fit_list.append(SpectrumFitSingle(data=self.data[ii,:], wvl=self.wvl,
+                                                    line_number=self.line_number,line_wvl_init=self.line_wvl_init,
+                                                    int_max_init=self.int_max_init,fwhm_init=self.fwhm_init,
+                                                    err=self.err,same_width=self.same_width,stray_light=self.stray_light,
+                                                    stray_wvl_init=self.stray_wvl_init,stray_int_total=self.stray_int_total,
+                                                    stray_fwhm=self.stray_fwhm,mask=self.mask))
+        else:
+            for ii in range(self.frame_number):
+                self.single_fit_list.append(SpectrumFitSingle(data=self.data[ii,:], wvl=self.wvl,
+                                                    line_number=self.line_number,line_wvl_init=self.line_wvl_init,
+                                                    int_max_init=self.int_max_init,fwhm_init=self.fwhm_init,
+                                                    err=self.err[ii,:],same_width=self.same_width,stray_light=self.stray_light,
+                                                    stray_wvl_init=self.stray_wvl_init,stray_int_total=self.stray_int_total,
+                                                    stray_fwhm=self.stray_fwhm,mask=self.mask))
+
+
         
 
     def run_lse(self,ignore_err=False,absolute_sigma=True):
