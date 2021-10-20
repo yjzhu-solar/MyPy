@@ -1022,28 +1022,28 @@ class SpectrumFitRow:
             elif plot_mcmc:
                 pass
             else:
-                ydata = self.fwhm_fit
-                yerr = self.fwhm_err
+                ydata = np.squeeze(self.fwhm_fit)
+                yerr = np.squeeze(self.fwhm_err)
         elif var == "int":
             if plot_hmc:
                 pass
             elif plot_mcmc:
                 pass
             else:
-                ydata = self.int_total_fit
-                yerr = self.int_total_err
+                ydata = np.squeeze(self.int_total_fit)
+                yerr = np.squeeze(self.int_total_err)
         elif var == "wvl":  
             if plot_hmc:
                 pass
             elif plot_mcmc:
                 pass
             else:
-                ydata = self.line_wvl_fit
-                yerr = self.line_wvl_err
+                ydata = np.squeeze(self.line_wvl_fit)
+                yerr = np.squeeze(self.line_wvl_err)
         fig, ax = plt.subplots(figsize=(8,6),constrained_layout=True)
 
         if (self.same_width is True) or (self.line_number == 1):
-            ax.errorbar(xdata,ydata,yerr=yerr[:,0],lw=2,capsize=3,marker="o",markersize=5)
+            ax.errorbar(xdata,ydata,yerr=yerr,lw=2,capsize=3,marker="o",markersize=5)
         else:
             for ii in range(self.line_number):
                 ax.errorbar(xdata,ydata[:,ii],yerr=yerr[:,ii],lw=2,capsize=3,marker="o",markersize=5,
