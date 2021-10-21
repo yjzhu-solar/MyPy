@@ -1051,8 +1051,10 @@ class SpectrumFitRow:
             for ii in range(self.line_number):
                 ax.errorbar(xdata,ydata[:,ii],yerr=yerr[:,ii],lw=2,capsize=3,marker="o",markersize=5,
                             label=line_label[ii])
-
+        
         ax.tick_params(labelsize=18,direction="in")
+        if xlabel is not None:
+            ax.set_xlabel(xlabel,fontsize=18)
         ax.set_ylabel(ylabel,fontsize=18)
         ax.legend(fontsize=18,frameon=False)
         return ax 
