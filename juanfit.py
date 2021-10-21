@@ -853,7 +853,7 @@ class SpectrumFitRow:
 
         
 
-    def run_lse(self,ignore_err=False,absolute_sigma=True):
+    def run_lse(self,ignore_err=False,absolute_sigma=True,prev_init=True):
         '''
             Performs least square estimation (Chi square fitting)
             to the spectral line(s).
@@ -867,6 +867,14 @@ class SpectrumFitRow:
         '''
 
         for ii in range(self.frame_number):
+            if (ii == 0) or (prev_init is False):
+                pass
+            else:
+                self.single_fit_list[ii].line_wvl_init = self.single_fit_list[ii-1].line_wvl_fit
+                self.single_fit_list[ii].fwhm_init = self.single_fit_list[ii-1].fwhm_fit
+                self.single_fit_list[ii].int_max_init = 2.355*self.single_fit_list[ii-1].int_total_fit/ \
+                    np.sqrt(2.*np.pi)/self.single_fit_list[ii-1]
+            
             self.single_fit_list[ii].run_lse(ignore_err=ignore_err,absolute_sigma=absolute_sigma)
             self.line_wvl_fit[ii:,] = self.single_fit_list[ii].line_wvl_fit
             self.line_wvl_err[ii:,] = self.single_fit_list[ii].line_wvl_err
@@ -876,7 +884,7 @@ class SpectrumFitRow:
             self.fwhm_err[ii] = self.single_fit_list[ii].fwhm_err
             self.int_cont_fit[ii] = self.single_fit_list[ii].int_cont_fit
             self.int_cont_err[ii] = self.single_fit_list[ii].int_cont_err
-    
+
     def plot_fit(self, plot_fit=True, plot_hmc=False,plot_mcmc=False,
                 color_style="Red",plot_title=None,xlabel=None,ylabel=None,xlim=None,
                 save_fig=False,save_fname="./fit_row_result.pdf",save_fmt="pdf",save_dpi=300):
