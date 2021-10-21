@@ -1009,7 +1009,7 @@ class SpectrumFitRow:
                                     
     def plot_variation(self,var="fwhm",plot_hmc=False,plot_mcmc=False,
                         xdata=None,xlabel=None,ylabel=None,xlim=None,
-                        line_label=None):
+                        ylim=None,line_label=None):
         
         if xdata is None:
             xdata = np.arange(self.frame_number)
@@ -1065,6 +1065,10 @@ class SpectrumFitRow:
             ax.set_xlabel(xlabel,fontsize=18)
         ax.set_ylabel(ylabel,fontsize=18)
         ax.legend(fontsize=18,frameon=False)
+        if xlim is not None:
+            ax.set_xlim(xlim)
+        if ylim is not None:
+            ax.set_ylim(ylim)
         return ax 
 
 def gaussian(wvl,line_wvl,int_total,fwhm):
