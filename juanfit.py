@@ -873,7 +873,7 @@ class SpectrumFitRow:
                 self.single_fit_list[ii].line_wvl_init = self.single_fit_list[ii-1].line_wvl_fit
                 self.single_fit_list[ii].fwhm_init = self.single_fit_list[ii-1].fwhm_fit
                 self.single_fit_list[ii].int_max_init = 2.355*self.single_fit_list[ii-1].int_total_fit/ \
-                    np.sqrt(2.*np.pi)/self.single_fit_list[ii-1]
+                    np.sqrt(2.*np.pi)/self.single_fit_list[ii-1].fwhm_fit
             
             self.single_fit_list[ii].run_lse(ignore_err=ignore_err,absolute_sigma=absolute_sigma)
             self.line_wvl_fit[ii:,] = self.single_fit_list[ii].line_wvl_fit
