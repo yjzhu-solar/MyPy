@@ -515,10 +515,10 @@ class SpectrumFitSingle:
                 fwhm_err_plot = self.fwhm_err_hmc
                 int_cont_err_plot = self.int_cont_err_hmc
 
-                int_total_text_fmt = r'$I_0 = {:.3g}_{{-{:.1g}}}^{{+{:.1g}}}$'
-                line_wvl_text_fmt = r'$\lambda_0 = {:.6g}_{{-{:.1g}}}^{{+{:.1g}}}$'
-                fwhm_text_fmt = r'$\Delta \lambda = {:.3f}_{{-{:.1g}}}^{{+{:.1g}}}$'
-                int_cont_text_fmt = r'$I_{{\rm bg}} = {:.2g}_{{-{:.1g}}}^{{+{:.1g}}}$'
+                int_total_text_fmt = r'$I_0 = {{{:.3g}}}_{{-{:.1g}}}^{{+{:.1g}}}$'
+                line_wvl_text_fmt = r'$\lambda_0 = {{{:.6g}}}_{{-{:.1g}}}^{{+{:.1g}}}$'
+                fwhm_text_fmt = r'$\Delta \lambda = {{{:.3f}}}_{{-{:.1g}}}^{{+{:.1g}}}$'
+                int_cont_text_fmt = r'$I_{{\rm bg}} = {{{:.2g}}}_{{-{:.1g}}}^{{+{:.1g}}}$'
             else:
                 line_wvl_plot = self.line_wvl_fit
                 int_total_plot = self.int_total_fit
