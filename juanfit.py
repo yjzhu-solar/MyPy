@@ -48,8 +48,8 @@ class SpectrumFitSingle:
         to the input spectra.
     '''
     def __init__(self, data, wvl, line_number=None, line_wvl_init=None, int_max_init=None, \
-                fwhm_init=None, err=None,err_percent=None, same_width=False, stray_light=False, \
-                stray_wvl_init=None, stray_int_total=None, stray_fwhm=None, \
+                fwhm_init=None, bg_init=None, err=None, err_percent=None, same_width=False, \
+                stray_light=False, stray_wvl_init=None, stray_int_total=None, stray_fwhm=None, \
                 mask=None,custom_func=None,custom_init=None):
 
         '''
@@ -131,6 +131,11 @@ class SpectrumFitSingle:
             self.fwhm_init = np.array(fwhm_init)
             self.same_width = same_width
 
+            if bg_init is None:
+                self.bg_init = np.min((np.mean(self.data[:2]),np.mean(self.data[-2:])))
+            else:
+                self.bg_init = bg_init
+
             #fitted parameters
             self.line_wvl_fit = np.zeros(self.line_number)
             self.line_wvl_err = np.zeros(self.line_number)
@@ -151,6 +156,7 @@ class SpectrumFitSingle:
 
             self.int_cont_fit = np.float64(0.0)
             self.int_cont_err = np.float64(0.0)
+
         else:
             self.custom_fit = np.zeros_like(custom_init)
             self.custom_err = np.zeros_like(custom_init)
@@ -203,11 +209,11 @@ class SpectrumFitSingle:
                                                     axis=None)
                     popt = np.concatenate((self.line_wvl_init,
                                         self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
-                                        new_fwhm_init,np.mean(self.data[:2])),axis = None)
+                                        new_fwhm_init,self.bg_init),axis = None)
                 else:
                     popt = np.concatenate((self.line_wvl_init,
                                         self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
-                                        self.fwhm_init,np.mean(self.data[:2])),axis = None)
+                                        self.fwhm_init,self.bg_init),axis = None)
                 if type(self.same_width) is list:
                     popt, pcov = curve_fit(self.multi_gaussian_mixture_width, self.wvl_tofit, self.data_tofit,
                                         p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma) 
