@@ -48,7 +48,7 @@ class SpectrumFitSingle:
         to the input spectra.
     '''
     def __init__(self, data, wvl, line_number=None, line_wvl_init=None, int_max_init=None, \
-                fwhm_init=None, bg_init=None, err=None, err_percent=None, same_width=False, \
+                fwhm_init=None, int_cont_init=None, err=None, err_percent=None, same_width=False, \
                 stray_light=False, stray_wvl_init=None, stray_int_total=None, stray_fwhm=None, \
                 mask=None,custom_func=None,custom_init=None):
 
@@ -131,10 +131,10 @@ class SpectrumFitSingle:
             self.fwhm_init = np.array(fwhm_init)
             self.same_width = same_width
 
-            if bg_init is None:
-                self.bg_init = np.min((np.mean(self.data[:2]),np.mean(self.data[-2:])))
+            if int_cont_init is None:
+                self.int_cont_init = np.min((np.mean(self.data[:2]),np.mean(self.data[-2:])))
             else:
-                self.bg_init = bg_init
+                self.int_cont_init = int_cont_init
 
             #fitted parameters
             self.line_wvl_fit = np.zeros(self.line_number)
@@ -179,7 +179,7 @@ class SpectrumFitSingle:
             else:
                 self.err_tofit = self.err
 
-    def run_lse(self,ignore_err=False,absolute_sigma=True):
+    def run_lse(self,ignore_err=False,absolute_sigma=True,maxfev=2800):
         '''
             Performs least square estimation (Chi square fitting)
             to the spectral line(s).
@@ -209,14 +209,14 @@ class SpectrumFitSingle:
                                                     axis=None)
                     popt = np.concatenate((self.line_wvl_init,
                                         self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
-                                        new_fwhm_init,self.bg_init),axis = None)
+                                        new_fwhm_init,self.int_cont_init),axis = None)
                 else:
                     popt = np.concatenate((self.line_wvl_init,
                                         self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
-                                        self.fwhm_init,self.bg_init),axis = None)
+                                        self.fwhm_init,self.int_cont_init),axis = None)
                 if type(self.same_width) is list:
                     popt, pcov = curve_fit(self.multi_gaussian_mixture_width, self.wvl_tofit, self.data_tofit,
-                                        p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma) 
+                                        p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma,maxfev=maxfev) 
 
                     self.line_wvl_fit = popt[:self.line_number]
                     self.int_total_fit = popt[self.line_number:self.line_number*2]
@@ -241,7 +241,7 @@ class SpectrumFitSingle:
 
                 elif self.same_width is True:
                     popt, pcov = curve_fit(self.multi_gaussian_same_width, self.wvl_tofit, self.data_tofit,
-                                        p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma)
+                                        p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma,maxfev=maxfev)
                     
                     self.line_wvl_fit = popt[:self.line_number]
                     self.int_total_fit = popt[self.line_number:self.line_number*2]
@@ -255,7 +255,7 @@ class SpectrumFitSingle:
                     self.int_cont_err = perr[-1]
                 else:
                     popt, pcov = curve_fit(self.multi_gaussian_diff_width, self.wvl_tofit, self.data_tofit,
-                                        p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma)
+                                        p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma,maxfev=maxfev)
                     
                     self.line_wvl_fit = popt[:self.line_number]
                     self.int_total_fit = popt[self.line_number:self.line_number*2]
@@ -269,14 +269,14 @@ class SpectrumFitSingle:
                     self.int_cont_err = perr[-1]     
             else:
                 popt, pcov = curve_fit(self.custom_func, self.wvl_tofit, self.data_tofit,
-                    p0=self.custom_init,sigma=err_lse,absolute_sigma=absolute_sigma) 
+                    p0=self.custom_init,sigma=err_lse,absolute_sigma=absolute_sigma,maxfev=maxfev) 
                 
                 self.custom_fit = popt
                 self.custom_err = np.sqrt(np.diagonal(pcov))
         else:
             print("Fitting with stray light is not supported in this version.")
 
-    def run_HahnMC(self,ignore_err=False,n_chain=10000,cred_lvl=90,absolute_sigma=True):
+    def run_HahnMC(self,ignore_err=False,n_chain=10000,cred_lvl=None,absolute_sigma=True):
         '''
             Fit line profiles using the Monte-Carlo method described 
             in Hahn et al. 2012, ApJ, 753, 36.
@@ -287,8 +287,9 @@ class SpectrumFitSingle:
             If True, ignore the input error in fitting. Default is False.
             n_chain : int, optional 
             The number of Monte Carlo iteration. Default is 10,000.
-            cred_lvl: integer or float between 0 - 100, optional 
-            Credible level of the fitting uncertainty. Default is 90.   
+            cred_lvl: None or integer or float between 0 - 100, optional 
+            If None, calculate from standard deviation. If not None, retrieve uncertainty from 
+            the credible levels. Default is None.   
         '''
 
         self.run_lse(ignore_err=ignore_err,absolute_sigma=absolute_sigma)
@@ -337,10 +338,14 @@ class SpectrumFitSingle:
             popt_result = np.zeros_like(popt)
             popt_err = np.zeros((2,popt.shape[0]))
             for jj in range(popt.shape[0]):
-                mcmc_result = np.percentile(popt_chain[:, jj], [50-cred_lvl/2, 50, 50+cred_lvl/2])
-                residual = np.diff(mcmc_result)
-                popt_result[jj] = mcmc_result[1]
-                popt_err[:,jj] = np.array([residual[0],residual[1]])
+                if cred_lvl is not None:
+                    mcmc_result = np.percentile(popt_chain[:, jj], [50-cred_lvl/2, 50, 50+cred_lvl/2])
+                    residual = np.diff(mcmc_result)
+                    popt_result[jj] = mcmc_result[1]
+                    popt_err[:,jj] = np.array([residual[0],residual[1]])
+                else:
+                    popt_result[jj] = np.percentile(popt_chain[:, jj],50)
+                    popt_err[:,jj] = np.array([np.std(popt_chain[:, jj]),np.std(popt_chain[:, jj])])
             
             self.line_wvl_fit_hmc = popt_result[:self.line_number]
             self.int_total_fit_hmc = popt_result[self.line_number:self.line_number*2]
@@ -372,10 +377,15 @@ class SpectrumFitSingle:
             popt_result = np.zeros_like(popt)
             popt_err = np.zeros((2,popt.shape[0]))
             for jj in range(popt.shape[0]):
-                mcmc_result = np.percentile(popt_chain[:, jj], [50-cred_lvl/2, 50, 50+cred_lvl/2])
-                residual = np.diff(mcmc_result)
-                popt_result[jj] = mcmc_result[1]
-                popt_err[:,jj] = np.array([residual[0],residual[1]])
+                if cred_lvl is not None:
+                    mcmc_result = np.percentile(popt_chain[:, jj], [50-cred_lvl/2, 50, 50+cred_lvl/2])
+                    residual = np.diff(mcmc_result)
+                    popt_result[jj] = mcmc_result[1]
+                    popt_err[:,jj] = np.array([residual[0],residual[1]])
+                else:
+                    popt_result[jj] = np.percentile(popt_chain[:, jj],50)
+                    popt_err[:,jj] = np.array([np.std(popt_chain[:, jj]),np.std(popt_chain[:, jj])])
+
             
             self.line_wvl_fit_hmc = popt_result[:self.line_number]
             self.int_total_fit_hmc = popt_result[self.line_number:self.line_number*2]
@@ -395,11 +405,15 @@ class SpectrumFitSingle:
             popt_result = np.zeros_like(popt)
             popt_err = np.zeros((2,popt.shape[0]))
             for jj in range(popt.shape[0]):
-                mcmc_result = np.percentile(popt_chain[:, jj], [50-cred_lvl/2, 50, 50+cred_lvl/2])
-                residual = np.diff(mcmc_result)
-                #print(type(np.array(mcmc[1])))
-                popt_result[jj] = mcmc_result[1]
-                popt_err[:,jj] = np.array([residual[0],residual[1]])
+                if cred_lvl is not None:
+                    mcmc_result = np.percentile(popt_chain[:, jj], [50-cred_lvl/2, 50, 50+cred_lvl/2])
+                    residual = np.diff(mcmc_result)
+                    #print(type(np.array(mcmc[1])))
+                    popt_result[jj] = mcmc_result[1]
+                    popt_err[:,jj] = np.array([residual[0],residual[1]])
+                else:
+                    popt_result[jj] = np.percentile(popt_chain[:, jj],50)
+                    popt_err[:,jj] = np.array([np.std(popt_chain[:, jj]),np.std(popt_chain[:, jj])])
         
             self.line_wvl_fit_hmc = popt_result[:self.line_number]
             self.int_total_fit_hmc = popt_result[self.line_number:self.line_number*2]
@@ -415,7 +429,8 @@ class SpectrumFitSingle:
     
     def plot(self, plot_fit=True,plot_params=True, plot_mcmc=False,plot_hmc=False,
                 color_style="Red",plot_title=None,xlabel=None,ylabel=None,xlim=None,
-                save_fig=False,save_fname="./fit_result.pdf",save_fmt="pdf",save_dpi=300):
+                custom_params_style=None,line_caption=None,save_fig=False,save_fname="./fit_result.pdf",
+                save_fmt="pdf",save_dpi=300):
         '''
             Plot the input spectra and fitting results. 
 
@@ -450,12 +465,20 @@ class SpectrumFitSingle:
             Dots per inch (DPI) of the saved plot. Default is 300. 
 
         '''
-        if (self.custom_func is not None) and plot_params is True:
+        if (self.custom_func is not None) and (plot_params is True) and (custom_params_style is None):
             warn("Use custom function in the fitting. Will not plot fitted parameters.")
             plot_params = False
 
         self.wvl_plot = np.linspace(self.wvl[0],self.wvl[-1],5*len(self.wvl))
-        if (plot_fit is True) and (plot_params is True):
+        if (self.custom_func is not None) and (plot_params is True) and (custom_params_style is not None) \
+            and (plot_fit is True):
+            self.line_number = custom_params_style["line_number"]
+            fig = plt.figure(figsize=(8+3*np.ceil(self.line_number/2),8),constrained_layout=True)
+            gs_fig = fig.add_gridspec(1, 2,figure=fig,width_ratios=[8., 3*np.ceil(self.line_number/2)])
+            gs_plot = gs_fig[0].subgridspec(2, 1,height_ratios=[5,2])
+            ax = fig.add_subplot(gs_plot[0])
+            ax_res = fig.add_subplot(gs_plot[1])
+        elif (plot_fit is True) and (plot_params is True):
             fig = plt.figure(figsize=(8+3*np.ceil(self.line_number/2),8),constrained_layout=True)
             gs_fig = fig.add_gridspec(1, 2,figure=fig,width_ratios=[8., 3*np.ceil(self.line_number/2)])
             gs_plot = gs_fig[0].subgridspec(2, 1,height_ratios=[5,2])
@@ -478,6 +501,8 @@ class SpectrumFitSingle:
         ax.tick_params(which="minor",width=1.2,length=4,direction="in")
         ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
         ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+        ax.yaxis.get_offset_text().set_fontsize(18)
+        ax.yaxis.get_offset_text().set_y(1.05)
         #print("Wavelength:",self.line_wvl_fit)
         #print("Width:",self.fwhm_fit)
         #print("Width Error:",self.fwhm_err)
@@ -509,8 +534,33 @@ class SpectrumFitSingle:
 
 
         if plot_fit is True:
-            if self.custom_func is not None:
+            if (self.custom_func is not None) and (custom_params_style is None):
                 pass
+            elif (self.custom_func is not None) and (custom_params_style is not None):
+                line_wvl_plot = np.zeros_like(self.line_number)
+                int_total_plot = np.zeros_like(self.line_number)
+                fwhm_plot = np.zeros_like(self.line_number)
+                
+                line_wvl_err_plot = np.zeros_like(self.line_number)
+                int_total_err_plot = np.zeros_like(self.line_number)
+                fwhm_err_plot = np.zeros_like(self.line_number)
+                
+
+                for ii in range(self.line_number):
+                    line_wvl_plot[ii] = self.custom_fit[custom_params_style["params"][ii][0]]
+                    int_total_plot[ii] = self.custom_fit[custom_params_style["params"][ii][1]]
+                    fwhm_plot[ii] = self.custom_fit[custom_params_style["params"][ii][2]]
+                    
+                    line_wvl_err_plot[ii] = self.custom_err[custom_params_style["params"][ii][0]]
+                    int_total_err_plot[ii] = self.custom_err[custom_params_style["params"][ii][1]]
+                    fwhm_err_plot[ii] = self.custom_err[custom_params_style["params"][ii][2]]
+                int_cont_plot = self.custom_fit[custom_params_style["params"][ii][3]]
+                int_cont_err_plot = self.custom_err[custom_params_style["params"][ii][3]]
+
+                int_total_text_fmt = r'$I_0 = {:.3g}\pm{:.1g}$'
+                line_wvl_text_fmt = r'$\lambda_0 = {:.6g}\pm{:.1g}$'
+                fwhm_text_fmt = r'$\Delta \lambda = {:.3f}\pm{:.1g}$'
+                int_cont_text_fmt = r'$I_{{\rm bg}} = {:.2g}\pm{:.1g}$'
             elif plot_hmc is True:
                 line_wvl_plot = self.line_wvl_fit_hmc
                 int_total_plot = self.int_total_fit_hmc
@@ -571,6 +621,13 @@ class SpectrumFitSingle:
                                                     int_total_plot[jj], fwhm_plot[jj]) \
                                             + int_cont_plot
                             ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.8)   
+            elif custom_params_style is not None:
+                if self.line_number > 1:
+                    for jj in range(self.line_number):
+                        line_profile = gaussian(self.wvl_plot, line_wvl_plot[jj],
+                                                int_total_plot[jj], fwhm_plot[jj]) \
+                                        + int_cont_plot
+                        ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.8)   
 
             if self.err is None:
                 ax_res.scatter(self.wvl_tofit,res_fit,marker="o",s=15,color=colors[3])
@@ -610,48 +667,79 @@ class SpectrumFitSingle:
             ax_text.axis("off")
             if plot_mcmc or plot_hmc:
                 for ii in range(self.line_number):
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.95-(ii%2)*0.5,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
+                    ax_text.text(0.05+(ii//2)/text_ncol,0.87-(ii%2)*0.45,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
                     num2tex(int_total_err_plot[0,ii]),num2tex(int_total_err_plot[1,ii])),ha = 'left',va = 'center', 
                     color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
 
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.85-(ii%2)*0.5,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
+                    ax_text.text(0.05+(ii//2)/text_ncol,0.78-(ii%2)*0.45,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
                     num2tex(line_wvl_err_plot[0,ii]),num2tex(line_wvl_err_plot[1,ii])),ha = 'left',va = 'center', 
                     color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
 
                     if self.same_width is True:
-                        ax_text.text(0.05+(ii//2)/text_ncol,0.75-(ii%2)*0.5,fwhm_text_fmt.format(num2tex(fwhm_plot),
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot),
                         num2tex(fwhm_err_plot[0]),num2tex(fwhm_err_plot[1])),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                     else:
-                        ax_text.text(0.05+(ii//2)/text_ncol,0.75-(ii%2)*0.5,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
                         num2tex(fwhm_err_plot[0,ii]),num2tex(fwhm_err_plot[1,ii])),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                     
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.65-(ii%2)*0.5,int_cont_text_fmt.format(num2tex(int_cont_plot),
+                    ax_text.text(0.05+(ii//2)/text_ncol,0.60-(ii%2)*0.45,int_cont_text_fmt.format(num2tex(int_cont_plot),
                         num2tex(int_cont_err_plot[0]),num2tex(int_cont_err_plot[1])),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes) 
             else:
                 for ii in range(self.line_number):
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.95-(ii%2)*0.5,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
+                    ax_text.text(0.05+(ii//2)/text_ncol,0.87-(ii%2)*0.45,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
                     num2tex(int_total_err_plot[ii])),ha = 'left',va = 'center', 
                     color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
 
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.85-(ii%2)*0.5,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
+                    ax_text.text(0.05+(ii//2)/text_ncol,0.78-(ii%2)*0.45,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
                     num2tex(line_wvl_err_plot[ii])),ha = 'left',va = 'center', 
                     color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
 
                     if self.same_width is True:
-                        ax_text.text(0.05+(ii//2)/text_ncol,0.75-(ii%2)*0.5,fwhm_text_fmt.format(num2tex(fwhm_plot),
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot),
                         num2tex(fwhm_err_plot)),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                     else:
-                        ax_text.text(0.05+(ii//2)/text_ncol,0.75-(ii%2)*0.5,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
                         num2tex(fwhm_err_plot[ii])),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                     
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.65-(ii%2)*0.5,int_cont_text_fmt.format(num2tex(int_cont_plot),
+                    ax_text.text(0.05+(ii//2)/text_ncol,0.60-(ii%2)*0.45,int_cont_text_fmt.format(num2tex(int_cont_plot),
                         num2tex(int_cont_err_plot)),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+            
+            if self.line_number > 1:
+                if line_caption is None:
+                    line_caption = []
+                    for ii in range(self.line_number):
+                        line_caption.append(r"\textbf{\textsc{"+num_to_roman(ii+1,uppercase=False)+r"}}")
+                
+                for ii in range(self.line_number):
+                    ax_text.text(0.05+(ii//2)/text_ncol,0.95-(ii%2)*0.45,line_caption[ii],
+                    ha = 'left',va = 'center',color = 'black',fontsize = 18,linespacing=1.5,
+                    transform=ax_text.transAxes)
+
+                    ax_text.axhline(0.915-(ii%2)*0.45,xmin=0.05+(ii//2)/text_ncol,xmax=(ii//2+0.8)/text_ncol,color="#787878",alpha=0.7,lw=4)
+                    if self.same_width is True:
+                        ax.text(self.line_wvl_fit[ii],2.355*self.int_total_fit[ii]/self.fwhm_fit/np.sqrt(2*np.pi)+\
+                            0.05*np.diff(ax.get_ylim()) + self.int_cont_fit,line_caption[ii],
+                        ha = 'center',va = 'bottom',color = colors[3],fontsize = 18,linespacing=1.5)
+
+                    else:
+                        ax.text(self.line_wvl_fit[ii],2.355*self.int_total_fit[ii]/self.fwhm_fit[ii]/np.sqrt(2*np.pi)+\
+                            0.05*np.diff(ax.get_ylim()) + self.int_cont_fit,line_caption[ii],
+                        ha = 'center',va = 'bottom',color = colors[3],fontsize = 18,linespacing=1.5)
+
+                    
+
+                ax.set_ylim(top=ax.get_ylim()[1]*1.07)
+            else:
+                if line_caption is not None:
+                    ax_text.text(0.05+(ii//2)/text_ncol,0.95-(ii%2)*0.45,line_caption,
+                    ha = 'left',va = 'center',color = 'black',fontsize = 18,linespacing=1.5,
+                    transform=ax_text.transAxes)
 
         if save_fig is True:
             plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
@@ -985,6 +1073,9 @@ class SpectrumFitRow:
                 ax_.tick_params(which="major",length=4,direction="in")
                 if xlim is not None:
                     ax_.set_xlim(xlim)  
+                if self.mask is not None:
+                    for jj, mask_ in enumerate(self.mask):
+                        ax_.axvspan(mask_[0],mask_[1],color=colors[4],alpha=0.4)
             else:
                 ax_.axis("off")
         for ii in range(-4-(4*nrows-self.frame_number),0-(4*nrows-self.frame_number)):
@@ -1084,3 +1175,24 @@ def gaussian(wvl,line_wvl,int_total,fwhm):
     return line_profile
 
 
+def num_to_roman(number,uppercase=True):
+    num = [1, 4, 5, 9, 10, 40, 50, 90,
+        100, 400, 500, 900, 1000]
+    sym = ["I", "IV", "V", "IX", "X", "XL",
+        "L", "XC", "C", "CD", "D", "CM", "M"]
+    i = 12
+    
+    roman_number=""
+    while number:
+        div = number // num[i]
+        number %= num[i]
+  
+        while div:
+            roman_number += sym[i]
+            div -= 1
+        i -= 1
+    
+    if uppercase:
+        return roman_number
+    else:
+        return roman_number.lower()
