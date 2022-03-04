@@ -214,6 +214,7 @@ class SpectrumFitSingle:
                     popt = np.concatenate((self.line_wvl_init,
                                         self.int_max_init*np.sqrt(2.*np.pi)*self.fwhm_init/2.355,
                                         self.fwhm_init,self.int_cont_init),axis = None)
+                self.dof = len(self.wvl_tofit) - len(popt)
                 if type(self.same_width) is list:
                     popt, pcov = curve_fit(self.multi_gaussian_mixture_width, self.wvl_tofit, self.data_tofit,
                                         p0=popt,sigma=err_lse,absolute_sigma=absolute_sigma,maxfev=maxfev) 
@@ -268,6 +269,7 @@ class SpectrumFitSingle:
                     self.fwhm_err = perr[self.line_number*2:self.line_number*3]
                     self.int_cont_err = perr[-1]     
             else:
+                self.dof = len(self.wvl_tofit) - len(self.custom_init)
                 popt, pcov = curve_fit(self.custom_func, self.wvl_tofit, self.data_tofit,
                     p0=self.custom_init,sigma=err_lse,absolute_sigma=absolute_sigma,maxfev=maxfev) 
                 
@@ -276,7 +278,7 @@ class SpectrumFitSingle:
         else:
             print("Fitting with stray light is not supported in this version.")
 
-    def run_HahnMC(self,ignore_err=False,n_chain=10000,cred_lvl=None,absolute_sigma=True):
+    def run_HahnMC(self,ignore_err=False,n_chain=10000,cred_lvl=None,absolute_sigma=True,save_chain=False):
         '''
             Fit line profiles using the Monte-Carlo method described 
             in Hahn et al. 2012, ApJ, 753, 36.
@@ -425,12 +427,16 @@ class SpectrumFitSingle:
             self.fwhm_err_hmc = popt_err[:,self.line_number*2:self.line_number*3]
             self.int_cont_err_hmc = popt_err[:,-1]
 
+        if save_chain:
+            self.HahnMC_chain = popt_chain
+
 
     
     def plot(self, plot_fit=True,plot_params=True, plot_mcmc=False,plot_hmc=False,
                 color_style="Red",plot_title=None,xlabel=None,ylabel=None,xlim=None,
-                custom_params_style=None,line_caption=None,save_fig=False,save_fname="./fit_result.pdf",
-                save_fmt="pdf",save_dpi=300):
+                line_caption=None,save_fig=False,
+                params_prec = {"int":2,"wvl":1,"fwhm":2,"cont":1},
+                save_fname="./fit_result.pdf",save_fmt="pdf",save_dpi=300):
         '''
             Plot the input spectra and fitting results. 
 
@@ -465,20 +471,12 @@ class SpectrumFitSingle:
             Dots per inch (DPI) of the saved plot. Default is 300. 
 
         '''
-        if (self.custom_func is not None) and (plot_params is True) and (custom_params_style is None):
+        if (self.custom_func is not None) and (plot_params is True):
             warn("Use custom function in the fitting. Will not plot fitted parameters.")
             plot_params = False
 
         self.wvl_plot = np.linspace(self.wvl[0],self.wvl[-1],5*len(self.wvl))
-        if (self.custom_func is not None) and (plot_params is True) and (custom_params_style is not None) \
-            and (plot_fit is True):
-            self.line_number = custom_params_style["line_number"]
-            fig = plt.figure(figsize=(8+3*np.ceil(self.line_number/2),8),constrained_layout=True)
-            gs_fig = fig.add_gridspec(1, 2,figure=fig,width_ratios=[8., 3*np.ceil(self.line_number/2)])
-            gs_plot = gs_fig[0].subgridspec(2, 1,height_ratios=[5,2])
-            ax = fig.add_subplot(gs_plot[0])
-            ax_res = fig.add_subplot(gs_plot[1])
-        elif (plot_fit is True) and (plot_params is True):
+        if (plot_fit is True) and (plot_params is True):
             fig = plt.figure(figsize=(8+3*np.ceil(self.line_number/2),8),constrained_layout=True)
             gs_fig = fig.add_gridspec(1, 2,figure=fig,width_ratios=[8., 3*np.ceil(self.line_number/2)])
             gs_plot = gs_fig[0].subgridspec(2, 1,height_ratios=[5,2])
@@ -490,7 +488,7 @@ class SpectrumFitSingle:
             ax = fig.add_subplot(gs_plot[0])
             ax_res = fig.add_subplot(gs_plot[1])
         else:
-            fig, ax = plt.subplots(figsize=(8,6))
+            fig, ax = plt.subplots(figsize=(8,6),constrained_layout=True)
         ax.tick_params(which="both",labelsize=18,right=True,top=True)
         #ax.set_xlabel("Wavelength",fontsize=18)
         if ylabel is None:
@@ -534,33 +532,8 @@ class SpectrumFitSingle:
 
 
         if plot_fit is True:
-            if (self.custom_func is not None) and (custom_params_style is None):
+            if self.custom_func is not None:
                 pass
-            elif (self.custom_func is not None) and (custom_params_style is not None):
-                line_wvl_plot = np.zeros_like(self.line_number)
-                int_total_plot = np.zeros_like(self.line_number)
-                fwhm_plot = np.zeros_like(self.line_number)
-                
-                line_wvl_err_plot = np.zeros_like(self.line_number)
-                int_total_err_plot = np.zeros_like(self.line_number)
-                fwhm_err_plot = np.zeros_like(self.line_number)
-                
-
-                for ii in range(self.line_number):
-                    line_wvl_plot[ii] = self.custom_fit[custom_params_style["params"][ii][0]]
-                    int_total_plot[ii] = self.custom_fit[custom_params_style["params"][ii][1]]
-                    fwhm_plot[ii] = self.custom_fit[custom_params_style["params"][ii][2]]
-                    
-                    line_wvl_err_plot[ii] = self.custom_err[custom_params_style["params"][ii][0]]
-                    int_total_err_plot[ii] = self.custom_err[custom_params_style["params"][ii][1]]
-                    fwhm_err_plot[ii] = self.custom_err[custom_params_style["params"][ii][2]]
-                int_cont_plot = self.custom_fit[custom_params_style["params"][ii][3]]
-                int_cont_err_plot = self.custom_err[custom_params_style["params"][ii][3]]
-
-                int_total_text_fmt = r'$I_0 = {:.3g}\pm{:.1g}$'
-                line_wvl_text_fmt = r'$\lambda_0 = {:.6g}\pm{:.1g}$'
-                fwhm_text_fmt = r'$\Delta \lambda = {:.3f}\pm{:.1g}$'
-                int_cont_text_fmt = r'$I_{{\rm bg}} = {:.2g}\pm{:.1g}$'
             elif plot_hmc is True:
                 line_wvl_plot = self.line_wvl_fit_hmc
                 int_total_plot = self.int_total_fit_hmc
@@ -571,10 +544,14 @@ class SpectrumFitSingle:
                 fwhm_err_plot = self.fwhm_err_hmc
                 int_cont_err_plot = self.int_cont_err_hmc
 
-                int_total_text_fmt = r'$I_0 = {{{:.3g}}}_{{-{:.1g}}}^{{+{:.1g}}}$'
-                line_wvl_text_fmt = r'$\lambda_0 = {{{:.6g}}}_{{-{:.1g}}}^{{+{:.1g}}}$'
-                fwhm_text_fmt = r'$\Delta \lambda = {{{:.3f}}}_{{-{:.1g}}}^{{+{:.1g}}}$'
-                int_cont_text_fmt = r'$I_{{\rm bg}} = {{{:.2g}}}_{{-{:.1g}}}^{{+{:.1g}}}$'
+                int_total_text_fmt = r'$I_0 = {{{:#.{int_data_prec}g}}}' + \
+                r'_{{-{:#.{int_err_prec}g}}}^{{+{:#.{int_err_prec}g}}}$'
+                line_wvl_text_fmt = r'$\lambda_0 = {{{:#.{wvl_data_prec}g}}}' + \
+                r'_{{-{:#.{wvl_err_prec}g}}}^{{+{:#.{wvl_err_prec}g}}}$'
+                fwhm_text_fmt = r'$\Delta \lambda = {{{:#.{fwhm_data_prec}g}}}' + \
+                r'_{{-{:#.{fwhm_err_prec}g}}}^{{+{:#.{fwhm_err_prec}g}}}$'
+                int_cont_text_fmt = r'$I_{{\rm bg}} = {{{:#.{cont_data_prec}g}}}' + \
+                r'_{{-{:#.{cont_err_prec}g}}}^{{+{:#.{cont_err_prec}g}}}$'
             else:
                 line_wvl_plot = self.line_wvl_fit
                 int_total_plot = self.int_total_fit
@@ -585,10 +562,10 @@ class SpectrumFitSingle:
                 fwhm_err_plot = self.fwhm_err
                 int_cont_err_plot = self.int_cont_err
 
-                int_total_text_fmt = r'$I_0 = {:.3g}\pm{:.1g}$'
-                line_wvl_text_fmt = r'$\lambda_0 = {:.6g}\pm{:.1g}$'
-                fwhm_text_fmt = r'$\Delta \lambda = {:.3f}\pm{:.1g}$'
-                int_cont_text_fmt = r'$I_{{\rm bg}} = {:.2g}\pm{:.1g}$'
+                int_total_text_fmt = r'$I_0 = {:#.{int_data_prec}g}\pm{:#.{int_err_prec}g}$'
+                line_wvl_text_fmt = r'$\lambda_0 = {:#.{wvl_data_prec}g}\pm{:#.{wvl_err_prec}g}$'
+                fwhm_text_fmt = r'$\Delta \lambda = {:#.{fwhm_data_prec}g}\pm{:#.{fwhm_err_prec}g}$'
+                int_cont_text_fmt = r'$I_{{\rm bg}} = {:#.{cont_data_prec}g}\pm{:#.{cont_err_prec}g}$'
 
             if self.custom_func is not None:
                 spec_fit = self.custom_func(self.wvl_plot,*self.custom_fit)
@@ -621,19 +598,16 @@ class SpectrumFitSingle:
                                                     int_total_plot[jj], fwhm_plot[jj]) \
                                             + int_cont_plot
                             ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.8)   
-            elif custom_params_style is not None:
-                if self.line_number > 1:
-                    for jj in range(self.line_number):
-                        line_profile = gaussian(self.wvl_plot, line_wvl_plot[jj],
-                                                int_total_plot[jj], fwhm_plot[jj]) \
-                                        + int_cont_plot
-                        ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.8)   
+ 
 
             if self.err is None:
                 ax_res.scatter(self.wvl_tofit,res_fit,marker="o",s=15,color=colors[3])
             else:
                 ax_res.errorbar(self.wvl_tofit,res_fit,self.err_tofit,ds='steps-mid',color=colors[3],capsize=3,
                                 lw=2,ls="none",marker="o",markersize=5)
+                chi2_fit = np.sum((res_fit/self.err_tofit)**2)/self.dof
+                ax_res.text(0.98,0.9,r"$\chi^2 = {:.1f}$".format(chi2_fit),fontsize=18,
+                            ha="right",va="top",transform=ax_res.transAxes)
 
             ax_res.axhline(0,ls="--",lw=2,color="#91989F",alpha=0.7) 
             if xlabel is None:
@@ -667,47 +641,82 @@ class SpectrumFitSingle:
             ax_text.axis("off")
             if plot_mcmc or plot_hmc:
                 for ii in range(self.line_number):
+                    int_data_prec = np.ceil(np.log10(np.abs(int_total_plot[ii]))).astype("int") - \
+                        np.min(np.ceil(np.log10(int_total_err_plot[:,ii]))).astype("int") + params_prec["int"]
+                    
+
                     ax_text.text(0.05+(ii//2)/text_ncol,0.87-(ii%2)*0.45,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
-                    num2tex(int_total_err_plot[0,ii]),num2tex(int_total_err_plot[1,ii])),ha = 'left',va = 'center', 
+                    num2tex(int_total_err_plot[0,ii]),num2tex(int_total_err_plot[1,ii]),int_data_prec = int_data_prec,
+                    int_err_prec = params_prec["int"]),ha = 'left',va = 'center', 
                     color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
 
+                    wvl_data_prec = np.ceil(np.log10(np.abs(line_wvl_plot[ii]))).astype("int") - \
+                        np.min(np.ceil(np.log10(line_wvl_err_plot[:,ii])).astype("int")) + params_prec["wvl"]
+
+
                     ax_text.text(0.05+(ii//2)/text_ncol,0.78-(ii%2)*0.45,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
-                    num2tex(line_wvl_err_plot[0,ii]),num2tex(line_wvl_err_plot[1,ii])),ha = 'left',va = 'center', 
+                    num2tex(line_wvl_err_plot[0,ii]),num2tex(line_wvl_err_plot[1,ii]),wvl_data_prec = wvl_data_prec,
+                    wvl_err_prec = params_prec["wvl"]),ha = 'left',va = 'center', 
                     color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
 
                     if self.same_width is True:
+
+                        fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot))).astype("int") - \
+                            np.min(np.ceil(np.log10(fwhm_err_plot)).astype("int")) + params_prec["fwhm"]
+
                         ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot),
-                        num2tex(fwhm_err_plot[0]),num2tex(fwhm_err_plot[1])),ha = 'left',va = 'center', 
+                        num2tex(fwhm_err_plot[0]),num2tex(fwhm_err_plot[1]),fwhm_data_prec = fwhm_data_prec,
+                        fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                     else:
+                        fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot[ii]))).astype("int") - \
+                            np.min(np.ceil(np.log10(fwhm_err_plot[:,ii]))).astype("int") + params_prec["fwhm"]
+
                         ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
-                        num2tex(fwhm_err_plot[0,ii]),num2tex(fwhm_err_plot[1,ii])),ha = 'left',va = 'center', 
+                        num2tex(fwhm_err_plot[0,ii]),num2tex(fwhm_err_plot[1,ii]),fwhm_data_prec = fwhm_data_prec,
+                        fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                     
+                    cont_data_prec = np.ceil(np.log10(np.abs(int_cont_plot))).astype("int") - \
+                        np.min(np.ceil(np.log10(int_cont_err_plot))).astype("int") + params_prec["cont"]
+
                     ax_text.text(0.05+(ii//2)/text_ncol,0.60-(ii%2)*0.45,int_cont_text_fmt.format(num2tex(int_cont_plot),
-                        num2tex(int_cont_err_plot[0]),num2tex(int_cont_err_plot[1])),ha = 'left',va = 'center', 
+                        num2tex(int_cont_err_plot[0]),num2tex(int_cont_err_plot[1]),cont_data_prec = cont_data_prec,
+                        cont_err_prec = params_prec["cont"]),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes) 
             else:
                 for ii in range(self.line_number):
+                    int_data_prec = np.ceil(np.log10(np.abs(int_total_plot[ii]))).astype("int") - \
+                        np.ceil(np.log10(int_total_err_plot[ii])).astype("int") + params_prec["int"]
+
                     ax_text.text(0.05+(ii//2)/text_ncol,0.87-(ii%2)*0.45,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
-                    num2tex(int_total_err_plot[ii])),ha = 'left',va = 'center', 
+                    num2tex(int_total_err_plot[ii]),int_data_prec = int_data_prec,int_err_prec = params_prec["int"]),ha = 'left',va = 'center', 
                     color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
 
+                    wvl_data_prec = np.ceil(np.log10(np.abs(line_wvl_plot[ii]))).astype("int") - \
+                        np.ceil(np.log10(line_wvl_err_plot[ii])).astype("int") + params_prec["wvl"]
+
                     ax_text.text(0.05+(ii//2)/text_ncol,0.78-(ii%2)*0.45,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
-                    num2tex(line_wvl_err_plot[ii])),ha = 'left',va = 'center', 
+                    num2tex(line_wvl_err_plot[ii]),wvl_data_prec = wvl_data_prec,wvl_err_prec = params_prec["wvl"]),ha = 'left',va = 'center', 
                     color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
 
                     if self.same_width is True:
+                        fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot))).astype("int") - \
+                            np.ceil(np.log10(fwhm_err_plot)).astype("int") + params_prec["fwhm"]
                         ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot),
-                        num2tex(fwhm_err_plot)),ha = 'left',va = 'center', 
+                        num2tex(fwhm_err_plot),fwhm_data_prec = fwhm_data_prec,fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                     else:
+                        fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot[ii]))).astype("int") - \
+                            np.ceil(np.log10(fwhm_err_plot[ii])).astype("int") + params_prec["fwhm"]
                         ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
-                        num2tex(fwhm_err_plot[ii])),ha = 'left',va = 'center', 
+                        num2tex(fwhm_err_plot[ii]),fwhm_data_prec = fwhm_data_prec,fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                     
+                    cont_data_prec = np.ceil(np.log10(np.abs(int_cont_plot))).astype("int") - \
+                        np.ceil(np.log10(int_cont_err_plot)).astype("int") + params_prec["cont"]
                     ax_text.text(0.05+(ii//2)/text_ncol,0.60-(ii%2)*0.45,int_cont_text_fmt.format(num2tex(int_cont_plot),
-                        num2tex(int_cont_err_plot)),ha = 'left',va = 'center', 
+                        num2tex(int_cont_err_plot),cont_data_prec = cont_data_prec,cont_err_prec = params_prec["cont"]),ha = 'left',va = 'center', 
                         color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
             
             if self.line_number > 1:
