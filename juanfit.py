@@ -22,7 +22,8 @@ from matplotlib import ticker
 from IPython.display import display, Math
 from numpy.lib.function_base import delete
 import emcee
-from scipy.special import wofz
+import scipy
+from scipy.special import wofz, voigt_profile
 from scipy.optimize import curve_fit
 from num2tex import num2tex
 from warnings import warn
@@ -40,7 +41,8 @@ rcParams['ytick.major.width'] = 1
 rcParams['ytick.major.size'] = 4
 rcParams['ytick.minor.width'] = 1
 rcParams['ytick.minor.size'] = 2 
-rcParams['text.latex.preamble'] = r'\usepackage[T1]{fontenc} \usepackage{amsmath}'
+rcParams['text.latex.preamble'] = r'\usepackage[T1]{fontenc} \usepackage{amsmath} ' + \
+    r'\usepackage{siunitx} \sisetup{detect-all=true}'
 
 class SpectrumFitSingle:
     '''
@@ -50,7 +52,7 @@ class SpectrumFitSingle:
     def __init__(self, data, wvl, line_number=None, line_wvl_init=None, int_max_init=None, \
                 fwhm_init=None, int_cont_init=None, err=None, err_percent=None, same_width=False, \
                 stray_light=False, stray_wvl_init=None, stray_int_total=None, stray_fwhm=None, \
-                mask=None,custom_func=None,custom_init=None):
+                mask=None,custom_func=None,custom_init=None) -> None:
 
         '''
             Initialize the SpectrumFitSingle class.
@@ -850,7 +852,7 @@ class SpectrumFitRow:
     def __init__(self, data, wvl, line_number, line_wvl_init, int_max_init, \
                 fwhm_init, err=None, same_width=False, stray_light=False, \
                 stray_wvl_init=None, stray_int_total=None, stray_fwhm=None, \
-                mask=None):
+                mask=None) -> None:
 
         '''
             Initialize the SpectrumFitRow class
@@ -1180,6 +1182,11 @@ class SpectrumFitRow:
 def gaussian(wvl,line_wvl,int_total,fwhm):
     line_profile = 2.355*int_total/np.sqrt(2.*np.pi)/fwhm \
                    *np.exp((-(1. / (2. * (fwhm/2.355)**2)) * (wvl - line_wvl)**2))
+
+    return line_profile
+
+def voigt(wvl, line_wvl,int_total,g_fwhm,l_fwhm):
+    line_profile = voigt_profile(wvl - line_wvl,g_fwhm/2.355,l_fwhm/2. )*int_total
 
     return line_profile
 
