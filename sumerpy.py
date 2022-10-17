@@ -170,7 +170,7 @@ def get_calibration(detector,epoch,attitude,evaluation,order):
     dir = ssw_dir + "soho/sumer/idl/contrib/wilhelm/rad/"
 
     if epoch == 0:
-        if detector is "det_a":
+        if detector == "det_a":
             sensit, wvl = read_radiometry_file_old(dir + "a_kbr_1st_old.rst")
             sen_kbr_1st[:sensit.shape[0]], lam_kbr_1st[:wvl.shape[0]] = sensit, wvl 
             sensit, wvl = read_radiometry_file_old(dir + "a_kbr_2nd.rst")
@@ -185,7 +185,7 @@ def get_calibration(detector,epoch,attitude,evaluation,order):
         if order < 3:
             if evaluation == 0:
                 if attitude == 0:
-                    if detector is "det_a":
+                    if detector == "det_a":
                         sensit, wvl = read_radiometry_file_new(dir + "a_kbr_1st_before.rst")
                         sen_kbr_1st[:sensit.shape[0]], lam_kbr_1st[:wvl.shape[0]] = sensit, wvl
                         sensit, wvl = read_radiometry_file_new(dir + "a_bare_1st_before_2002.rst")
@@ -194,7 +194,7 @@ def get_calibration(detector,epoch,attitude,evaluation,order):
                         sen_kbr_2nd[:sensit.shape[0]], lam_kbr_2nd[:wvl.shape[0]] = sensit, wvl
                         sensit, wvl = read_radiometry_file_new(dir + "a_bare_2nd_before_2002.rst")
                         sen_bare_2nd[:sensit.shape[0]], lam_bare_2nd[:wvl.shape[0]] = sensit, wvl
-                    elif detector is "det_b":
+                    elif detector == "det_b":
                         sensit, wvl = read_radiometry_file_new(dir + "b_kbr_1st_before.rst")
                         sen_kbr_1st[:sensit.shape[0]], lam_kbr_1st[:wvl.shape[0]] = sensit, wvl
                         sensit, wvl = read_radiometry_file_new(dir + "b_bare_1st_before.rst")
@@ -204,7 +204,7 @@ def get_calibration(detector,epoch,attitude,evaluation,order):
                         sensit, wvl = read_radiometry_file_new(dir + "b_bare_2nd_before.rst")
                         sen_bare_2nd[:sensit.shape[0]], lam_bare_2nd[:wvl.shape[0]] = sensit, wvl
                 else:
-                    if detector is "det_a":
+                    if detector == "det_a":
                         sensit, wvl = read_radiometry_file_new(dir + "a_kbr_1st_after.rst")
                         sen_kbr_1st[:sensit.shape[0]], lam_kbr_1st[:wvl.shape[0]] = sensit, wvl
                         sensit, wvl = read_radiometry_file_new(dir + "a_bare_1st_after_2002.rst")
@@ -213,7 +213,7 @@ def get_calibration(detector,epoch,attitude,evaluation,order):
                         sen_kbr_2nd[:sensit.shape[0]], lam_kbr_2nd[:wvl.shape[0]] = sensit, wvl
                         sensit, wvl = read_radiometry_file_new(dir + "a_bare_2nd_after_2002.rst")
                         sen_bare_2nd[:sensit.shape[0]], lam_bare_2nd[:wvl.shape[0]] = sensit, wvl
-                    elif detector is "det_b":
+                    elif detector == "det_b":
                         sensit, wvl = read_radiometry_file_new(dir + "b_kbr_1st_after.rst")
                         sen_kbr_1st[:sensit.shape[0]], lam_kbr_1st[:wvl.shape[0]] = sensit, wvl
                         sensit, wvl = read_radiometry_file_new(dir + "b_bare_1st_after.rst")
@@ -224,13 +224,13 @@ def get_calibration(detector,epoch,attitude,evaluation,order):
                         sen_bare_2nd[:sensit.shape[0]], lam_bare_2nd[:wvl.shape[0]] = sensit, wvl
             else:
                 if attitude == 0:
-                    if detector is "det_a":
+                    if detector == "det_a":
                         sensit, wvl = read_radiometry_file_new(dir + "kbr_1st_a_before.rst")
                         sen_kbr_1st[:sensit.shape[0]], lam_kbr_1st[:wvl.shape[0]] = sensit, wvl
                         sensit, wvl = read_radiometry_file_new(dir + "bare_1st_a_before_2002.rst")
                         sen_bare_1st[:sensit.shape[0]], lam_bare_1st[:wvl.shape[0]] = sensit, wvl
 
-                    elif detector is "det_b":
+                    elif detector == "det_b":
                         sensit, wvl = read_radiometry_file_new(dir + "kbr_1st_b_before.rst")
                         sen_kbr_1st[:sensit.shape[0]], lam_kbr_1st[:wvl.shape[0]] = sensit, wvl
                         sensit, wvl = read_radiometry_file_new(dir + "bare_1st_b_before_2002.rst")
@@ -238,13 +238,13 @@ def get_calibration(detector,epoch,attitude,evaluation,order):
                     sensit, wvl = read_radiometry_file_new(dir + "kbr_2nd_before.rst")
                     sen_kbr_2nd[:sensit.shape[0]], lam_kbr_2nd[:wvl.shape[0]] = sensit, wvl
                 else:
-                    if detector is "det_a":
+                    if detector == "det_a":
                         sensit, wvl = read_radiometry_file_new(dir + "kbr_1st_a_after.rst")
                         sen_kbr_1st[:sensit.shape[0]], lam_kbr_1st[:wvl.shape[0]] = sensit, wvl
                         sensit, wvl = read_radiometry_file_new(dir + "bare_1st_a_after_2002.rst")
                         sen_bare_1st[:sensit.shape[0]], lam_bare_1st[:wvl.shape[0]] = sensit, wvl
 
-                    elif detector is "det_b":
+                    elif detector == "det_b":
                         sensit, wvl = read_radiometry_file_new(dir + "kbr_1st_b_after.rst")
                         sen_kbr_1st[:sensit.shape[0]], lam_kbr_1st[:wvl.shape[0]] = sensit, wvl
                         sensit, wvl = read_radiometry_file_new(dir + "bare_1st_b_after_2002.rst")
@@ -295,24 +295,24 @@ def vignetting(slit,wavelength):
 
 def photocathode(surface,order,calibration):
     if order == 1:
-        if surface is "kbr":
+        if surface == "kbr":
             wvl = calibration[:,0]
             sensit = calibration[:,1]
-        elif surface is "bare":
+        elif surface == "bare":
             wvl = calibration[:,2]
             sensit = calibration[:,3]
     elif order == 2:
-        if surface is "kbr":
+        if surface == "kbr":
             wvl = calibration[:,4]
             sensit = calibration[:,5]
-        elif surface is "bare":
+        elif surface == "bare":
             wvl = calibration[:,6]
             sensit = calibration[:,7]
     elif order == 3:
-        if surface is "kbr":
+        if surface == "kbr":
             wvl = calibration[:,8]
             sensit = calibration[:,9]
-        elif surface is "bare":
+        elif surface == "bare":
             wvl = calibration[:,10]
             sensit = calibration[:,11]
 
@@ -447,16 +447,16 @@ def radiometry(slit0,wavelength,order,count_rate,bare=False,kbr=True,px=True,lin
     else:
         detector = "det_b"
 
-    if (test is True) and (detector is "det_b"):
+    if (test is True) and (detector == "det_b"):
         test_phase = 0.82
-    elif (test is True) and (detector is "det_a"):
+    elif (test is True) and (detector == "det_a"):
         test_phase = 1.0
         warn("Test phase only with detector B. No test phase set.")
     else:
         test_phase = 1.0
         warn("No test phase set by default.")
     
-    if (order == 3) and (detector is "det_b"):
+    if (order == 3) and (detector == "det_b"):
         sys.exit("3rd order calibration only available for detector A.")
     
     if (sum([before,after]) in (0,2)):
@@ -484,7 +484,7 @@ def radiometry(slit0,wavelength,order,count_rate,bare=False,kbr=True,px=True,lin
     wvl, sensit = photocathode(surface,order,calibration)
     mag_a, d_lam_a, mag_b, d_lam_b = magnification(wavelength,order)
 
-    if detector is "det_a":
+    if detector == "det_a":
         mag_a_b = mag_a
         d_lam = d_lam_a
     else:
@@ -493,7 +493,7 @@ def radiometry(slit0,wavelength,order,count_rate,bare=False,kbr=True,px=True,lin
     
     if np.min(wvl) != 0:
         minwave = np.min(wvl[np.where(wvl > 0)])
-        if (detector is "det_a") and (order == 1):
+        if (detector == "det_a") and (order == 1):
             minwave = 770
         maxwave = np.max(wvl)
         inrange = (np.where((wavelength>=minwave) | (wavelength<=maxwave)))[0]
@@ -566,6 +566,38 @@ def radiometry(slit0,wavelength,order,count_rate,bare=False,kbr=True,px=True,lin
         sys.exit("irrad_au=True is only effective together with sun_line=True")
 
     return result
+
+def detector_bottom_top(wvl, det="A"):
+    bbot=np.flip(np.array([-503.342,4.651,-0.0168628,3.03637e-05,-2.64783e-08,8.77005e-12]))
+    btop=np.flip(np.array([-1420.08,15.2641,-0.0535999,9.29212e-05,-7.86775e-08,2.58698e-11]))
+    c=np.flip(np.array([0.023036093, -9.0158920e-07, -1.6460661e-09, -1.4244883e-12]))
+
+    poly_c = np.poly1d(c)
+    if det == "A":
+        pass
+    elif det == "B":
+        wvl=wvl+poly_c(wvl)*2653
+    else:
+        sys.exit("Invalid detector name")
+
+    poly_bbot = np.poly1d(bbot)
+    poly_btop = np.poly1d(btop)
+
+    detector_bot = poly_bbot(wvl)
+    detecotr_top = poly_btop(wvl)
+
+    return detector_bot, detecotr_top
+
+def delta_pixel(wvl1,wvl2,pixel,det="A",det_bot1=None,det_top1=None,det_bot2=None,det_top2=None):
+    if (det_bot1 is None) and (det_top1 is None):
+        det_bot1, det_top1 = detector_bottom_top(wvl1,det)
+    if (det_bot2 is None) and (det_top2 is None):
+        det_bot2, det_top2 = detector_bottom_top(wvl2,det)
+
+    new_pixel = (pixel-det_bot1)*(det_top2-det_bot2)/(det_top1-det_bot1) + det_bot2
+
+    return new_pixel
+
 
 
 if __name__ == "__main__":
