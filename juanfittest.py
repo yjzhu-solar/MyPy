@@ -19,8 +19,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib import ticker
-from matplotlib.ticker import (MultipleLocator, AutoMinorLocator, 
-                                AutoLocator, MaxNLocator)
 from IPython.display import display, Math
 from numpy.lib.function_base import delete
 import emcee
@@ -32,11 +30,6 @@ from warnings import warn
 import sys
 import multiprocessing as mp
 import copy
-import astropy.constants as const
-from astropy.visualization import ZScaleInterval, ImageNormalize, LogStretch, AsymmetricPercentileInterval,\
-         ManualInterval, SqrtStretch
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-
 
 #plot setting 
 from matplotlib import rcParams
@@ -1041,10 +1034,7 @@ class SpectrumFitRow:
                 self.single_fit_list[ii].int_max_init = 2.355*self.single_fit_list[ii-1].int_total_fit/ \
                     np.sqrt(2.*np.pi)/self.single_fit_list[ii-1].fwhm_fit
             
-            try:
-                self.single_fit_list[ii].run_lse(ignore_err=ignore_err,absolute_sigma=absolute_sigma)
-            except:
-                pass
+            self.single_fit_list[ii].run_lse(ignore_err=ignore_err,absolute_sigma=absolute_sigma)
             self.line_wvl_fit[ii:,] = self.single_fit_list[ii].line_wvl_fit
             self.line_wvl_err[ii:,] = self.single_fit_list[ii].line_wvl_err
             self.int_total_fit[ii,:] = self.single_fit_list[ii].int_total_fit
@@ -1342,7 +1332,7 @@ class SpectrumFit2D:
             self.wvl_tofit = self.wvl
             self.data_tofit = self.data
             self.err_tofit = self.err
-        elif len(self.wvl.shape) == 1:
+        else:
             delete_index_all = []
             for ii in range(len(self.mask)):
                 delete_index = np.where((self.wvl>=self.mask[ii][0]) & (self.wvl<=self.mask[ii][1]))[0]
@@ -1353,23 +1343,6 @@ class SpectrumFit2D:
                 self.err_tofit = np.delete(self.err,delete_index_all,axis=2)
             else:
                 self.err_tofit = self.err
-        elif len(self.wvl.shape) == 2:
-            self.wvl_tofit = np.copy(self.wvl)
-            self.data_tofit = np.copy(self.wvl)
-            if self.err is not None:
-                self.err_tofit = np.copy(self.err)
-            else:
-                self.err_tofit = self.err
-            for jj in range(self.npix_raster):
-                delete_index_all = []
-                for ii in range(len(self.mask)):
-                    delete_index = np.where((self.wvl[jj,:]>=self.mask[ii][0]) & (self.wvl[jj,:]<=self.mask[ii][1]))[0]
-                    delete_index_all = delete_index_all + delete_index.tolist()
-                self.wvl_tofit[jj,:] = np.delete(self.wvl[jj,:],delete_index_all)
-                self.data_tofit[:,jj,:] = np.delete(self.data[:,jj,:],delete_index_all,axis=1)
-                if self.err is not None:
-                    self.err_tofit[:,jj,:] = np.delete(self.err[:,jj,:],delete_index_all,axis=1)
-              
 
         #If the custom fitting function is not provided, read the initial 
         #values for the embedded multi-gaussian functions. And create the 
@@ -1409,18 +1382,11 @@ class SpectrumFit2D:
             self.custom_err = np.zeros((self.npix_slit,self.npix_raster,len(self.custom_init)))  
 
     def run_lse_along_slit(self,index_raster,ignore_err,absolute_sigma,prev_init):
-        if len(self.wvl_tofit.shape) == 1:
-            fit_model = SpectrumFitRow(self.data_tofit[:,index_raster,:],self.wvl_tofit,
-                            self.line_number,self.line_wvl_init,self.int_max_init,self.fwhm_init,
-                            self.err_tofit,self.same_width,self.stray_light,self.stray_wvl_init,
-                            self.stray_int_total,self.stray_fwhm,mask=None,custom_func=self.custom_func,
-                            custom_init=self.custom_init)
-        elif len(self.wvl_tofit.shape) == 2:
-            fit_model = SpectrumFitRow(self.data_tofit[:,index_raster,:],self.wvl_tofit[index_raster,:],
-                            self.line_number,self.line_wvl_init,self.int_max_init,self.fwhm_init,
-                            self.err_tofit,self.same_width,self.stray_light,self.stray_wvl_init,
-                            self.stray_int_total,self.stray_fwhm,mask=None,custom_func=self.custom_func,
-                            custom_init=self.custom_init)
+        fit_model = SpectrumFitRow(self.data_tofit[:,index_raster,:],self.wvl_tofit,
+                        self.line_number,self.line_wvl_init,self.int_max_init,self.fwhm_init,
+                        self.err_tofit,self.same_width,self.stray_light,self.stray_wvl_init,
+                        self.stray_int_total,self.stray_fwhm,mask=None,custom_func=self.custom_func,
+                        custom_init=self.custom_init)
         fit_model.run_lse(ignore_err=ignore_err,absolute_sigma=absolute_sigma,prev_init=prev_init,clean_obj_list=True)
         fit_model_dist = copy.deepcopy(fit_model.return_dict())
         del fit_model
@@ -1482,74 +1448,6 @@ class SpectrumFit2D:
                 self.int_cont_fit[:,ii] = pool_out[ii]["int_cont_fit"]
                 self.int_cont_err[:,ii] = pool_out[ii]["int_cont_err"]
 
-    def plot_fit2d(self,param,line_index=0,xcoord=None,ycoord=None,xmesh=None,ymesh=None,
-                    extent=None,vmin=None,vmax=None,scale=None,ax=None,title=None,cmap=None,
-                    xlabel=None,ylabel=None,ref_wvl=None,vel_corr="column",inst_width=None):
-        if param == "int":
-            data_to_plot = self.int_total_fit[:,:,line_index]
-        elif param == "wvl":
-            data_to_plot = self.line_wvl_fit[:,:,line_index]
-        elif param == "vel":
-            data_to_plot = (ref_wvl - self.line_wvl_fit[:,:,line_index])/ref_wvl*const.c.cgs.value/1e5
-            if vel_corr == "column":
-                data_to_plot = data_to_plot - np.nanmedian(data_to_plot,axis=0)[np.newaxis,:]
-                print("Doppler velocity corrected by the median of each raster.")
-            elif vel_corr == "image":
-                data_to_plot = data_to_plot - np.nanmedian(data_to_plot)
-                print("Doppler velocity corrected by the median of the image.")
-        elif (param == "fwhm") or (param == "veff"):
-            if type(self.same_width) is list:
-                data_to_plot = self.fwhm_fit[:,:,line_index]
-            elif self.same_width is True:
-                data_to_plot = self.fwhm_fit
-            else:
-                data_to_plot = self.fwhm_fit[:,:,line_index]
-
-            if inst_width is not None:
-                if isinstance(inst_width, np.ndarray):
-                    data_to_plot = np.sqrt(data_to_plot**2 - inst_width[:,np.newaxis]**2)
-                else:
-                    data_to_plot = np.sqrt(data_to_plot**2 - inst_width**2)
-                print("Instrumental width corrected.")
-
-            if param == "veff":
-                data_to_plot = data_to_plot/ref_wvl/np.sqrt(4*np.log(2))*const.c.cgs.value/1e5
-                
-        elif param == "cont":
-            data_to_plot = self.int_cont_fit
-
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(7,7),constrained_layout=True)
-
-        if scale is None:
-            norm = ImageNormalize(data_to_plot,vmin=vmin,vmax=vmax)
-        elif scale == "sqrt":
-            norm = ImageNormalize(data_to_plot,vmin=vmin,vmax=vmax,stretch=SqrtStretch())
-        elif scale == "log":
-            norm = ImageNormalize(data_to_plot,vmin=vmin,vmax=vmax,stretch=LogStretch())
-
-        if cmap is None:
-            if param == "vel":
-                cmap = "bwr_r"
-            else:
-                cmap = "viridis"
-
-        if (xcoord is not None) and (ycoord is not None):
-            im = ax.pcolormesh(xcoord, ycoord, data_to_plot, rasterized=True,cmap=cmap,norm=norm)
-        else:
-            im = ax.imshow(data_to_plot, origin="lower",cmap=cmap,extent=extent,norm=norm)
-        
-        plot_colorbar(im, ax, width="5%")
-
-        ax.set_title(title,fontsize=16)
-        if xlabel is not None:
-            ax.set_xlabel(xlabel,fontsize=16)
-        if ylabel is not None:
-            ax.set_ylabel(ylabel,fontsize=16)
-        ax.tick_params(labelsize=16)
-
-
-
 
 def gaussian(wvl,line_wvl,int_total,fwhm):
     line_profile = 2.355*int_total/np.sqrt(2.*np.pi)/fwhm \
@@ -1584,14 +1482,3 @@ def num_to_roman(number,uppercase=True):
         return roman_number
     else:
         return roman_number.lower()
-
-def plot_colorbar(im, ax, width="3%", height="100%",loc="lower left",fontsize=16):
-    clb_ax = inset_axes(ax,width=width,height=height,loc=loc,
-                bbox_to_anchor=(1.02, 0., 1, 1),
-                 bbox_transform=ax.transAxes,
-                 borderpad=0)
-    clb = plt.colorbar(im,pad = 0.05,orientation='vertical',ax=ax,cax=clb_ax)
-    clb_ax.yaxis.set_minor_locator(AutoMinorLocator(5))
-    clb_ax.yaxis.get_offset_text().set_fontsize(fontsize)
-    clb_ax.tick_params(labelsize=fontsize)
-    return clb, clb_ax
