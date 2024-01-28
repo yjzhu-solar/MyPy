@@ -1484,7 +1484,8 @@ class SpectrumFit2D:
 
     def plot_fit2d(self,param,line_index=0,xcoord=None,ycoord=None,xmesh=None,ymesh=None,
                     extent=None,vmin=None,vmax=None,scale=None,ax=None,title=None,cmap=None,
-                    xlabel=None,ylabel=None,ref_wvl=None,vel_corr="column",inst_width=None):
+                    xlabel=None,ylabel=None,ref_wvl=None,vel_corr="column",inst_width=None,
+                    aspect=None):
         if param == "int":
             data_to_plot = self.int_total_fit[:,:,line_index]
         elif param == "wvl":
@@ -1536,8 +1537,10 @@ class SpectrumFit2D:
 
         if (xcoord is not None) and (ycoord is not None):
             im = ax.pcolormesh(xcoord, ycoord, data_to_plot, rasterized=True,cmap=cmap,norm=norm)
-        else:
+        elif (extent is not None):
             im = ax.imshow(data_to_plot, origin="lower",cmap=cmap,extent=extent,norm=norm)
+        elif (aspect is not None):
+            im = ax.imshow(data_to_plot, origin="lower",cmap=cmap,norm=norm,aspect=aspect)
         
         plot_colorbar(im, ax, width="5%")
 
