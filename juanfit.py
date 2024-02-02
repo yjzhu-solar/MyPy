@@ -1485,7 +1485,7 @@ class SpectrumFit2D:
     def plot_fit2d(self,param,line_index=0,xcoord=None,ycoord=None,xmesh=None,ymesh=None,
                     extent=None,vmin=None,vmax=None,scale=None,ax=None,title=None,cmap=None,
                     xlabel=None,ylabel=None,ref_wvl=None,vel_corr="column",inst_width=None,
-                    aspect=None):
+                    aspect=None,return_data=False):
         if param == "int":
             data_to_plot = self.int_total_fit[:,:,line_index]
         elif param == "wvl":
@@ -1550,6 +1550,9 @@ class SpectrumFit2D:
         if ylabel is not None:
             ax.set_ylabel(ylabel,fontsize=16)
         ax.tick_params(labelsize=16)
+
+        if return_data:
+            return data_to_plot
 
 
 
