@@ -48,6 +48,7 @@ class SunBlinker():
     def _init_plot(self):
         self.fig = plt.figure(figsize=self.figsize,constrained_layout=True)
         self.ax = self.fig.add_subplot(111, projection=self.map1)
+        self.ax.set_aspect(self.map1.plot_settings['aspect'])
         self.im = self.map1.plot(axes=self.ax)
         self.ax.set_title(None)
 
