@@ -12,7 +12,7 @@ from IPython.display import HTML, display
 
 class SunBlinker():
     def __init__(self, map1, map2, reproject=False, fps=5, figsize=(5,5),
-                 norm1=None, norm2=None) -> None:
+                 norm1=None, norm2=None, save_fname=None) -> None:
         self.map1 = map1
         if reproject:
             self.map2 = map2.reproject_to(map1.wcs)
@@ -38,6 +38,9 @@ class SunBlinker():
         
         self.anim_html = HTML(self.anim.to_jshtml())
 
+        if save_fname is not None:
+            self.anim.save(save_fname, writer='imagemagick', fps=self.fps)
+
         self.fig.clf()
         plt.close()
 
@@ -48,7 +51,8 @@ class SunBlinker():
     def _init_plot(self):
         self.fig = plt.figure(figsize=self.figsize,constrained_layout=True)
         self.ax = self.fig.add_subplot(111, projection=self.map1)
-        self.ax.set_aspect(self.map1.plot_settings['aspect'])
+        if 'aspect' in self.map1.plot_settings.keys():
+            self.ax.set_aspect(self.map1.plot_settings['aspect'])
         self.im = self.map1.plot(axes=self.ax)
         self.ax.set_title(None)
 
