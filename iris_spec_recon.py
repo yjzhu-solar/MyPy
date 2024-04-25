@@ -8,6 +8,7 @@ from astropy.coordinates import SkyCoord
 from astropy.time import Time
 import astropy.units as u
 from scipy.interpolate import LinearNDInterpolator
+from copy import deepcopy
 
 
 def iris_spec_xymesh_from_header(win_header, aux_header, aux_data):
@@ -36,7 +37,9 @@ def iris_spec_xymesh_from_header(win_header, aux_header, aux_data):
     return xmesh_rot + xcen[np.newaxis,:], ymesh_rot + ycen[np.newaxis,:]
 
 
-def iris_spec_map_interp_from_header(filename,data,win_ext=1,aux_ext=-2,synchronize="mid",sdo_rsun=True):
+def iris_spec_map_interp_from_header(filename,data,mask=None,win_ext=1,aux_ext=-2,synchronize="mid",sdo_rsun=True):
+    data = deepcopy(data)	
+
     with fits.open(filename) as hdul:
         win_header = hdul[win_ext].header.copy()
         aux_data = hdul[aux_ext].data.copy()
@@ -49,6 +52,10 @@ def iris_spec_map_interp_from_header(filename,data,win_ext=1,aux_ext=-2,synchron
 
         nx = win_header["NAXIS3"]
         ny = win_header["NAXIS2"]
+
+        if (ny, nx) != data.shape[:2]:
+            raise ValueError("Data shape does not match the shape of the mesh")
+
         deltax = win_header["CDELT3"]
         deltay = win_header["CDELT2"]
 
@@ -97,7 +104,17 @@ def iris_spec_map_interp_from_header(filename,data,win_ext=1,aux_ext=-2,synchron
         xi_interp = np.moveaxis(np.array(np.meshgrid(x_interp, y_interp)), 0, -1)
         points_flatten = (xmesh.flatten(), ymesh.flatten())
 
-        data_interp_linear_func = LinearNDInterpolator(points_flatten, data.flatten())
+        if mask is not None:
+            if mask.shape == data.shape:
+                data[mask] = np.nan
+            elif len(data.shape) == 3 and mask.shape == data.shape[:2]:
+                data[mask] = np.nan
+        
+        if len(data.shape) == 2:
+            data_interp_linear_func = LinearNDInterpolator(points_flatten, data.flatten())
+        elif len(data.shape) == 3:
+            data_interp_linear_func = LinearNDInterpolator(points_flatten, data.reshape(-1, data.shape[2]))
+
         data_interp_linear = data_interp_linear_func(xi_interp)
 
         if synchronize in ["mid", "start", "end"]:
@@ -106,8 +123,11 @@ def iris_spec_map_interp_from_header(filename,data,win_ext=1,aux_ext=-2,synchron
             wcs_time = date_obs_start
         
         wcs = xy_to_wcs(x_interp, y_interp, data_interp_linear, wcs_time, detector_type, rsun=rsun)
-
-        return sunpy.map.Map(data_interp_linear, wcs)
+        
+        if len(data.shape) == 2:
+            return sunpy.map.Map(data_interp_linear, wcs)
+        elif len(data.shape) == 3:
+            return data_interp_linear, wcs
 
 
 def xy_to_wcs(x,y,data,date_obs,detector,rsun=None):
