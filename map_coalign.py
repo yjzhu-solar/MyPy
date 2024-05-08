@@ -23,6 +23,7 @@ class MapSequenceCoalign(MapSequence):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.nt = len(self)
 
     def __setitem__(self, key, value):
         if isinstance(value, sunpy.map.GenericMap):
@@ -111,7 +112,6 @@ class MapSequenceCoalign(MapSequence):
 
         self.nx = self[0].data.shape[1]
         self.ny = self[0].data.shape[0]
-        self.nt = len(self)
 
         if bottom_left is None or top_right is None:
             self.bottom_left = [self.nx//4, self.ny//4]
