@@ -287,13 +287,13 @@ class MapSequenceCoalign(MapSequence):
         self.textbox_top_right_x.on_submit(self._update_top_right_x)
         self.textbox_top_right_y.on_submit(self._update_top_right_y)
 
-        ax_close_botton = fig.add_axes([0.87,0.3,0.1,0.08])
-        close_button = Button(ax_close_botton, 'Close')
+        ax_close_button = fig.add_axes([0.87,0.3,0.1,0.08])
+        close_button = Button(ax_close_button, 'Close')
         close_button.on_clicked(self._close_window)
 
-        ax_select_botton = fig.add_axes([0.75,0.3,0.1,0.08])
+        ax_select_button = fig.add_axes([0.75,0.3,0.1,0.08])
         self.selecting_mode = False
-        self.select_button = CheckButtons(ax_select_botton, ['Select'],
+        self.select_button = CheckButtons(ax_select_button, ['Select'],
                                      frame_props={'sizes':[50]})
 
         self.select_rectangle = patches.Rectangle((0,0),1,1,edgecolor='blue', facecolor='none',
@@ -550,8 +550,8 @@ if __name__ == "__main__":
     parser.add_argument('-tr','--top_right', type=int, nargs=2, default=None, help='Top right corner of the region to align')
     parser.add_argument('-n','--nframes', type=int, default=10, help='Number of frames in each segment')
     parser.add_argument('-i','--iter', type=int, default=3, help='Number of iterations')
-    parser.add_argument('-nh','--no_header_check', default=False, help='Do not check the header of the maps')
-    parser.add_argument('-p','--preview', default=True, help='Video preview of the coaligned map sequence in the selected region')
+    parser.add_argument('-nh','--no_header_check', action='store_true', help='Do not check the header of the maps')
+    parser.add_argument('-np','--no_preview', action='store_true', help='Do not show the video preview of the coaligned map sequence in the selected region')
     args = parser.parse_args()
 
     map_files = sorted(glob(args.filename))
@@ -559,7 +559,7 @@ if __name__ == "__main__":
     ms.coalign(reference_index=args.reference_index, bottom_left=args.bottom_left, top_right=args.top_right,
                 check_header=not args.no_header_check, nframes=args.nframes, iter=args.iter)
     
-    if args.preview:
+    if not args.no_preview:
         anim = ms.plot(no_wcs=True)
         plt.show()
 
