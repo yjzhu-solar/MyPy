@@ -856,9 +856,9 @@ if  __name__ == "__main__":
     #     eui_map_seq_coalign[ii:ii+2,ii:ii+2,ii] = np.ones((2,2))*10
 
     slit_pick = SlitPick(eui_map_seq_coalign)
-    # slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=0)
+    slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=0)
     # slit_pick(bottom_left=[850,800]*u.pix, top_right=[1050,1000]*u.pix,wcs_index=0)
-    slit_pick(bottom_left=[700,550]*u.pix, top_right=[900,750]*u.pix,wcs_index=0)
+    # slit_pick(bottom_left=[700,550]*u.pix, top_right=[900,750]*u.pix,wcs_index=0)
 
     # slit_pick(bottom_left=[250,750]*u.pix, top_right=[420,920]*u.pix,wcs_index=0)
         

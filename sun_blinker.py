@@ -1,6 +1,7 @@
 import sunpy 
 import sunpy.map
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from astropy.visualization import (ImageNormalize, AsinhStretch,
@@ -41,10 +42,13 @@ class SunBlinker():
         if save_fname is not None:
             self.anim.save(save_fname, writer='imagemagick', fps=self.fps)
 
-        self.fig.clf()
-        plt.close()
+        if matplotlib.get_backend() == 'qtagg':
+            plt.show()
+        else:
+            self.fig.clf()
+            plt.close()
 
-        display(self.anim_html)
+            display(self.anim_html)
 
 
     
