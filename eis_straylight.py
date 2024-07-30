@@ -8,11 +8,80 @@ from regions import (EllipseAnnulusPixelRegion, PixCoord,
                      EllipsePixelRegion)
 import sunkit_image.coalignment as coalignment
 import warnings
+from PyDynamic.uncertainty.interpolate import interp1d_unc
 
 def calc_short_range_stray_light(eismap, center_coord, inner_radius=30*u.arcsec,
                                  outer_radius=50*u.arcsec, return_region=False,
                                  alpha=6.6):
     
+    mask, region = calc_short_range_annulus_mask(eismap, center_coord, inner_radius, outer_radius)
+
+    intensity_annulus = np.nanmean(eismap.data[mask])
+    int_sr_straylight = intensity_annulus/alpha
+
+    if return_region:
+        return int_sr_straylight, region
+    else:
+        return int_sr_straylight
+    
+def calc_short_range_stray_light_profiles(eismap, eis_cube, center_coord, 
+                                          inner_radius=30*u.arcsec,
+                                          outer_radius=50*u.arcsec, 
+                                          return_region=False,
+                                          return_center_profile=False,
+                                          alpha=6.6):
+    
+    mask, region = calc_short_range_annulus_mask(eismap, center_coord, inner_radius, outer_radius)
+    profiles_annulus = eis_cube.data[mask]
+    profiles_wavelength = eis_cube.wavelength[mask]
+    profiles_err = eis_cube.uncertainty.array[mask]
+
+    # find the best common wavelength range to interpolate
+    profiles_wavelength_min = np.nanmax(profiles_wavelength[:,0], axis=0)
+    profiles_wavelength_max = np.nanmin(profiles_wavelength[:,-1], axis=0)
+
+    center_pixel_ix, center_pixel_iy = eismap.world_to_pixel(center_coord)
+    center_pixel_ix, center_pixel_iy = center_pixel_ix.to_value(u.pix), center_pixel_iy.to_value(u.pix)
+    center_pixel_ix, center_pixel_iy = np.round(center_pixel_ix).astype(int), np.round(center_pixel_iy).astype(int)
+
+    center_profile = eis_cube.data[center_pixel_iy, center_pixel_ix, :]
+    center_wavelength = eis_cube.wavelength[center_pixel_iy, center_pixel_ix, :]
+    center_profile_err = eis_cube.uncertainty.array[center_pixel_iy, center_pixel_ix, :]
+
+    wvl_min_index = np.where(center_wavelength >= profiles_wavelength_min)[0][0]
+    wvl_max_index = np.where(center_wavelength <= profiles_wavelength_max)[0][-1]
+
+    common_wavelength = center_wavelength[wvl_min_index:wvl_max_index+1]
+    center_profile = center_profile[wvl_min_index:wvl_max_index+1]
+    center_profile_err = center_profile_err[wvl_min_index:wvl_max_index+1]
+
+    # interpolate the profiles to the common wavelength range
+    profiles_interp = np.zeros((profiles_annulus.shape[0], common_wavelength.size))
+    profiles_interp_err = np.zeros((profiles_annulus.shape[0], common_wavelength.size))
+    for ii in range(profiles_annulus.shape[0]):
+        _, profiles_interp[ii,:], profiles_interp_err[ii,:] = interp1d_unc(common_wavelength,
+                                                                        profiles_wavelength[ii,:],
+                                                                       profiles_annulus[ii,:],
+                                                                       profiles_err[ii,:],
+                                                                       kind='cubic')
+
+    profiles_annulus_mean = np.nanmean(profiles_interp, axis=0)/alpha
+    profiles_annulus_mean_err = np.sqrt(np.nansum(profiles_interp_err**2, axis=0))/np.sum(np.isfinite(profiles_interp), axis=0)/alpha
+
+    if return_region or return_center_profile:
+        aux_dict = {}
+        if return_region:
+            aux_dict['region'] = region
+        if return_center_profile:
+            aux_dict['center_profile'] = center_profile
+            aux_dict['center_profile_err'] = center_profile_err
+        
+        return profiles_annulus_mean, profiles_annulus_mean_err, common_wavelength, aux_dict
+    else:
+        return profiles_annulus_mean, profiles_annulus_mean_err, common_wavelength
+
+def calc_short_range_annulus_mask(eismap, center_coord, inner_radius=30*u.arcsec,
+                                  outer_radius=50*u.arcsec):
     if eismap.measurement != 'intensity':
         raise ValueError('EIS map must be an intensity map')
 
@@ -37,21 +106,16 @@ def calc_short_range_stray_light(eismap, center_coord, inner_radius=30*u.arcsec,
         raise ValueError('inner_radius and outer_radius must be astropy Quantities')
     
     region = EllipseAnnulusPixelRegion(center_coord_pix, 
-                                       inner_width=(inner_radius/eismap.scale.axis1).to_value(u.pix),
+                                    inner_width=(inner_radius/eismap.scale.axis1).to_value(u.pix),
                                         outer_width=(outer_radius/eismap.scale.axis1).to_value(u.pix),
                                         inner_height=(inner_radius/eismap.scale.axis2).to_value(u.pix),
                                         outer_height=(outer_radius/eismap.scale.axis2).to_value(u.pix),
                                         )
     
     mask = region.contains(PixCoord.from_sky(sunpy.map.all_coordinates_from_map(eismap), eismap.wcs))
-    intensity_annulus = np.nanmean(eismap.data[mask])
-    int_sr_straylight = intensity_annulus/alpha
 
-    if return_region:
-        return int_sr_straylight, region
-    else:
-        return int_sr_straylight
-    
+    return mask, region
+
 
 def calc_long_range_stray_light_aia_eis(eismap, aiamap, center_coord, region_radius=30*u.arcsec,
                                         return_region=False, beta=34.):

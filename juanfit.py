@@ -39,20 +39,34 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 
 #plot setting 
-from matplotlib import rcParams
-rcParams['text.usetex'] = True
-rcParams['font.family'] = 'serif'
-rcParams['axes.linewidth'] = 2
-rcParams['xtick.major.width'] = 1
-rcParams['xtick.major.size'] = 4
-rcParams['xtick.minor.width'] = 1
-rcParams['xtick.minor.size'] =2 
-rcParams['ytick.major.width'] = 1
-rcParams['ytick.major.size'] = 4
-rcParams['ytick.minor.width'] = 1
-rcParams['ytick.minor.size'] = 2 
-rcParams['text.latex.preamble'] = r'\usepackage[T1]{fontenc} \usepackage{amsmath} ' + \
-    r'\usepackage{siunitx} \sisetup{detect-all=true}'
+from matplotlib import rcParams, rc_context
+rc_context_dict = {'text.usetex': True,
+                   'font.family': 'serif',
+                   'axes.linewidth': 2,
+                   'xtick.major.width': 1,
+                   'xtick.major.size': 4,
+                   'xtick.minor.width': 1,
+                   'xtick.minor.size':2,
+                   'ytick.major.width': 1,
+                   'ytick.major.size': 4,
+                   'ytick.minor.width': 1,
+                   'ytick.minor.size': 2,
+                   'text.latex.preamble': r'\usepackage[T1]{fontenc} \usepackage{amsmath} ' + \
+                     r'\usepackage{siunitx} \sisetup{detect-all=true}'}
+
+# rcParams['text.usetex'] = True
+# rcParams['font.family'] = 'serif'
+# rcParams['axes.linewidth'] = 2
+# rcParams['xtick.major.width'] = 1
+# rcParams['xtick.major.size'] = 4
+# rcParams['xtick.minor.width'] = 1
+# rcParams['xtick.minor.size'] =2 
+# rcParams['ytick.major.width'] = 1
+# rcParams['ytick.major.size'] = 4
+# rcParams['ytick.minor.width'] = 1
+# rcParams['ytick.minor.size'] = 2 
+# rcParams['text.latex.preamble'] = r'\usepackage[T1]{fontenc} \usepackage{amsmath} ' + \
+#     r'\usepackage{siunitx} \sisetup{detect-all=true}'
 
 class SpectrumFitSingle:
     '''
@@ -531,290 +545,293 @@ class SpectrumFitSingle:
             Dots per inch (DPI) of the saved plot. Default is 300. 
 
         '''
-        if (self.custom_func is not None) and (plot_params is True):
-            warn("Use custom function in the fitting. Will not plot fitted parameters.")
-            plot_params = False
+        with rc_context(rc_context_dict):
+            if (self.custom_func is not None) and (plot_params is True):
+                warn("Use custom function in the fitting. Will not plot fitted parameters.")
+                plot_params = False
 
-        self.wvl_plot = np.linspace(self.wvl[0],self.wvl[-1],5*len(self.wvl))
-        if (plot_fit is True) and (plot_params is True):
-            fig = plt.figure(figsize=((8+3*np.ceil(self.line_number/2))*figsize_scale,8*figsize_scale),
-                            constrained_layout=True)
-            gs_fig = fig.add_gridspec(1, 2,figure=fig,width_ratios=[8., 3*np.ceil(self.line_number/2)])
-            gs_plot = gs_fig[0].subgridspec(2, 1,height_ratios=[5,2])
-            ax = fig.add_subplot(gs_plot[0])
-            ax_res = fig.add_subplot(gs_plot[1])
-        elif (plot_fit is True) and (plot_params is False):
-            fig = plt.figure(figsize=(8*figsize_scale,8*figsize_scale))
-            gs_plot = fig.add_gridspec(2, 1,height_ratios=[5,2])
-            ax = fig.add_subplot(gs_plot[0])
-            ax_res = fig.add_subplot(gs_plot[1])
-        else:
-            fig, ax = plt.subplots(figsize=(8*figsize_scale,6*figsize_scale),constrained_layout=True)
-        ax.tick_params(which="both",labelsize=18,right=True,top=True)
-        #ax.set_xlabel("Wavelength",fontsize=18)
-        if ylabel is None:
-            ax.set_ylabel("Intensity",fontsize=18)
-        else:
-            ax.set_ylabel(ylabel,fontsize=18)
-        ax.tick_params(which="major",width=1.2,length=8,direction="in")
-        ax.tick_params(which="minor",width=1.2,length=4,direction="in")
-        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(5))
-        ax.yaxis.get_offset_text().set_fontsize(18)
-        ax.yaxis.get_offset_text().set_y(1.05)
-        #print("Wavelength:",self.line_wvl_fit)
-        #print("Width:",self.fwhm_fit)
-        #print("Width Error:",self.fwhm_err)
-
-        if color_style == "Red":
-            colors = ["#E87A90","#FEDFE1","black","#E9002D","#DBD0D0"]
-        elif color_style == "Green":
-            colors = ["#00896C","#A8D8B9","black","#33A6B8","#DBD0D0"]
-        elif color_style == "Yellow":
-            colors = ["#FFBA84","#FAD689","black","#FC9F4D","#DBD0D0"]
-        elif color_style == "Blue":
-            colors = ["#3A8FB7","#A5DEE4","black","#58B2DC","#DBD0D0"]
-        elif color_style == "Purple":
-            colors = ["#8F77B5","#B28FCE","black","#6A4C9C","#DBD0D0"]
-
-
-        if self.err is None:
-            ln1, = ax.step(self.wvl,self.data,where="mid",color=colors[0],label = r"$I_{\rm obs}$",lw=2,zorder=15)
-        else:
-            ln1 = ax.errorbar(self.wvl,self.data,yerr = self.err,ds='steps-mid',color=colors[0],capsize=2,
-            label = r"$I_{\rm obs}$",lw=2,zorder=15)
-        
-        ax.fill_between(self.wvl,np.ones_like(self.wvl)*np.min(self.data),self.data,
-                        step='mid',color=colors[1],alpha=0.6)
-
-        if self.mask is not None:
-            for ii, mask_ in enumerate(self.mask):
-                ax.axvspan(mask_[0],mask_[1],color=colors[4],alpha=0.4)
-
-
-        if plot_fit is True:
-            if self.custom_func is not None:
-                pass
-            elif plot_hmc is True:
-                line_wvl_plot = self.line_wvl_fit_hmc
-                int_total_plot = self.int_total_fit_hmc
-                fwhm_plot = self.fwhm_fit_hmc
-                int_cont_plot = self.int_cont_fit_hmc
-                line_wvl_err_plot = self.line_wvl_err_hmc
-                int_total_err_plot = self.int_total_err_hmc
-                fwhm_err_plot = self.fwhm_err_hmc
-                int_cont_err_plot = self.int_cont_err_hmc
-
-                int_total_text_fmt = r'$I_0 = {{{:#.{int_data_prec}g}}}' + \
-                r'_{{-{:#.{int_err_prec}g}}}^{{+{:#.{int_err_prec}g}}}$'
-                line_wvl_text_fmt = r'$\lambda_0 = {{{:#.{wvl_data_prec}g}}}' + \
-                r'_{{-{:#.{wvl_err_prec}g}}}^{{+{:#.{wvl_err_prec}g}}}$'
-                fwhm_text_fmt = r'$\Delta \lambda = {{{:#.{fwhm_data_prec}g}}}' + \
-                r'_{{-{:#.{fwhm_err_prec}g}}}^{{+{:#.{fwhm_err_prec}g}}}$'
-                int_cont_text_fmt = r'$I_{{\rm bg}} = {{{:#.{cont_data_prec}g}}}' + \
-                r'_{{-{:#.{cont_err_prec}g}}}^{{+{:#.{cont_err_prec}g}}}$'
+            self.wvl_plot = np.linspace(self.wvl[0],self.wvl[-1],5*len(self.wvl))
+            if (plot_fit is True) and (plot_params is True):
+                fig = plt.figure(figsize=((8+3*np.ceil(self.line_number/2))*figsize_scale,8*figsize_scale),
+                                constrained_layout=True)
+                gs_fig = fig.add_gridspec(1, 2,figure=fig,width_ratios=[8., 3*np.ceil(self.line_number/2)])
+                gs_plot = gs_fig[0].subgridspec(2, 1,height_ratios=[5,2])
+                ax = fig.add_subplot(gs_plot[0])
+                ax_res = fig.add_subplot(gs_plot[1])
+            elif (plot_fit is True) and (plot_params is False):
+                fig = plt.figure(figsize=(8*figsize_scale,8*figsize_scale))
+                gs_plot = fig.add_gridspec(2, 1,height_ratios=[5,2])
+                ax = fig.add_subplot(gs_plot[0])
+                ax_res = fig.add_subplot(gs_plot[1])
             else:
-                line_wvl_plot = self.line_wvl_fit
-                int_total_plot = self.int_total_fit
-                fwhm_plot = self.fwhm_fit
-                int_cont_plot = self.int_cont_fit
-                line_wvl_err_plot = self.line_wvl_err
-                int_total_err_plot = self.int_total_err
-                fwhm_err_plot = self.fwhm_err
-                int_cont_err_plot = self.int_cont_err
-
-                int_total_text_fmt = r'$I_0 = {:#.{int_data_prec}g}\pm{:#.{int_err_prec}g}$'
-                line_wvl_text_fmt = r'$\lambda_0 = {:#.{wvl_data_prec}g}\pm{:#.{wvl_err_prec}g}$'
-                fwhm_text_fmt = r'$\Delta \lambda = {:#.{fwhm_data_prec}g}\pm{:#.{fwhm_err_prec}g}$'
-                int_cont_text_fmt = r'$I_{{\rm bg}} = {:#.{cont_data_prec}g}\pm{:#.{cont_err_prec}g}$'
-
-            if self.custom_func is not None:
-                spec_fit = self.custom_func(self.wvl_plot,*self.custom_fit)
-                res_fit = self.data_tofit - self.custom_func(self.wvl_tofit,*self.custom_fit)                
-            elif self.same_width is True:
-                p_fit = np.concatenate((line_wvl_plot,int_total_plot,fwhm_plot,
-                                        int_cont_plot),axis=None)
-                spec_fit = self.multi_gaussian_same_width(self.wvl_plot,*p_fit)
-                res_fit = self.data_tofit - self.multi_gaussian_same_width(self.wvl_tofit,*p_fit) 
+                fig, ax = plt.subplots(figsize=(8*figsize_scale,6*figsize_scale),constrained_layout=True)
+            ax.tick_params(which="both",labelsize=18,right=True,top=True)
+            #ax.set_xlabel("Wavelength",fontsize=18)
+            if ylabel is None:
+                ax.set_ylabel("Intensity",fontsize=18)
             else:
-                p_fit = np.concatenate((line_wvl_plot,int_total_plot,fwhm_plot,
-                                        int_cont_plot),axis=None)
-                spec_fit = self.multi_gaussian_diff_width(self.wvl_plot,*p_fit) 
-                res_fit = self.data_tofit - self.multi_gaussian_diff_width(self.wvl_tofit,*p_fit)                           
+                ax.set_ylabel(ylabel,fontsize=18)
+            ax.tick_params(which="major",width=1.2,length=8,direction="in")
+            ax.tick_params(which="minor",width=1.2,length=4,direction="in")
+            ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+            ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+            ax.yaxis.get_offset_text().set_fontsize(18)
+            ax.yaxis.get_offset_text().set_y(1.05)
+            #print("Wavelength:",self.line_wvl_fit)
+            #print("Width:",self.fwhm_fit)
+            #print("Width Error:",self.fwhm_err)
 
-            ln2, = ax.plot(self.wvl_plot,spec_fit,color=colors[2],ls="-",label = r"$I_{\rm fit}$",lw=2,
-                            zorder=16,alpha=0.7)
+            if color_style == "Red":
+                colors = ["#E87A90","#FEDFE1","black","#E9002D","#DBD0D0"]
+            elif color_style == "Green":
+                colors = ["#00896C","#A8D8B9","black","#33A6B8","#DBD0D0"]
+            elif color_style == "Yellow":
+                colors = ["#FFBA84","#FAD689","black","#FC9F4D","#DBD0D0"]
+            elif color_style == "Blue":
+                colors = ["#3A8FB7","#A5DEE4","black","#58B2DC","#DBD0D0"]
+            elif color_style == "Purple":
+                colors = ["#8F77B5","#B28FCE","black","#6A4C9C","#DBD0D0"]
 
-            if self.custom_func is None:
-                if self.line_number > 1:
-                    if self.same_width is True:
-                        for jj in range(self.line_number):
-                            line_profile = gaussian(self.wvl_plot, line_wvl_plot[jj],
-                                                    int_total_plot[jj], fwhm_plot) \
-                                            + int_cont_plot
-                            ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.8)
-                    else:
-                        for jj in range(self.line_number):
-                            line_profile = gaussian(self.wvl_plot, line_wvl_plot[jj],
-                                                    int_total_plot[jj], fwhm_plot[jj]) \
-                                            + int_cont_plot
-                            ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.8)   
- 
 
             if self.err is None:
-                ax_res.scatter(self.wvl_tofit,res_fit,marker="o",s=15,color=colors[3])
+                ln1, = ax.step(self.wvl,self.data,where="mid",color=colors[0],label = r"$I_{\rm obs}$",lw=2,zorder=15)
             else:
-                ax_res.errorbar(self.wvl_tofit,res_fit,self.err_tofit,ds='steps-mid',color=colors[3],capsize=3,
-                                lw=2,ls="none",marker="o",markersize=5)
-                chi2_fit = np.sum((res_fit/self.err_tofit)**2)/self.dof
-                ax_res.text(0.98,0.9,r"$\chi^2 = {:.1f}$".format(chi2_fit),fontsize=18,
-                            ha="right",va="top",transform=ax_res.transAxes)
+                ln1 = ax.errorbar(self.wvl,self.data,yerr = self.err,ds='steps-mid',color=colors[0],capsize=2,
+                label = r"$I_{\rm obs}$",lw=2,zorder=15)
+            
+            ax.fill_between(self.wvl,np.ones_like(self.wvl)*np.min(self.data),self.data,
+                            step='mid',color=colors[1],alpha=0.6)
 
-            ax_res.axhline(0,ls="--",lw=2,color="#91989F",alpha=0.7) 
-            if xlabel is None:
-                ax_res.set_xlabel(r"$\textrm{Wavelength}$",fontsize=18)
-            else:
-                ax_res.set_xlabel(xlabel,fontsize=18)
-            ax_res.set_ylabel(r"$r$",fontsize=18)
-            ax_res.tick_params(which="both",labelsize=18,top=True,right=True)
-            ax_res.tick_params(which="major",width=1.2,length=8,direction="in")
-            ax_res.tick_params(which="minor",width=1.2,length=4,direction="in")
-            ax_res.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
-            ax_res.yaxis.set_minor_locator(ticker.AutoMinorLocator(5))
-
-            if xlim is not None:
-                ax_res.set_xlim(xlim)
             if self.mask is not None:
                 for ii, mask_ in enumerate(self.mask):
-                    ax_res.axvspan(mask_[0],mask_[1],color=colors[4],alpha=0.4)
+                    ax.axvspan(mask_[0],mask_[1],color=colors[4],alpha=0.4)
 
 
-        if xlim is not None:
-            ax.set_xlim(xlim)
+            if plot_fit is True:
+                if self.custom_func is not None:
+                    pass
+                elif plot_hmc is True:
+                    line_wvl_plot = self.line_wvl_fit_hmc
+                    int_total_plot = self.int_total_fit_hmc
+                    fwhm_plot = self.fwhm_fit_hmc
+                    int_cont_plot = self.int_cont_fit_hmc
+                    line_wvl_err_plot = self.line_wvl_err_hmc
+                    int_total_err_plot = self.int_total_err_hmc
+                    fwhm_err_plot = self.fwhm_err_hmc
+                    int_cont_err_plot = self.int_cont_err_hmc
 
-        if plot_title is not None:
-            ax.set_title(plot_title,fontsize=18)
+                    int_total_text_fmt = r'$I_0 = {{{:#.{int_data_prec}g}}}' + \
+                    r'_{{-{:#.{int_err_prec}g}}}^{{+{:#.{int_err_prec}g}}}$'
+                    line_wvl_text_fmt = r'$\lambda_0 = {{{:#.{wvl_data_prec}g}}}' + \
+                    r'_{{-{:#.{wvl_err_prec}g}}}^{{+{:#.{wvl_err_prec}g}}}$'
+                    fwhm_text_fmt = r'$\Delta \lambda = {{{:#.{fwhm_data_prec}g}}}' + \
+                    r'_{{-{:#.{fwhm_err_prec}g}}}^{{+{:#.{fwhm_err_prec}g}}}$'
+                    int_cont_text_fmt = r'$I_{{\rm bg}} = {{{:#.{cont_data_prec}g}}}' + \
+                    r'_{{-{:#.{cont_err_prec}g}}}^{{+{:#.{cont_err_prec}g}}}$'
+                else:
+                    line_wvl_plot = self.line_wvl_fit
+                    int_total_plot = self.int_total_fit
+                    fwhm_plot = self.fwhm_fit
+                    int_cont_plot = self.int_cont_fit
+                    line_wvl_err_plot = self.line_wvl_err
+                    int_total_err_plot = self.int_total_err
+                    fwhm_err_plot = self.fwhm_err
+                    int_cont_err_plot = self.int_cont_err
 
-        if (plot_params and plot_fit) is True:
-            gs_text = gs_fig[1].subgridspec(2, 1,height_ratios=[5,2])
-            text_ncol = np.ceil(self.line_number/2)
-            ax_text = fig.add_subplot(gs_text[0])
-            ax_text.axis("off")
-            if plot_mcmc or plot_hmc:
-                for ii in range(self.line_number):
-                    int_data_prec = np.ceil(np.log10(np.abs(int_total_plot[ii]))).astype("int") - \
-                        np.min(np.ceil(np.log10(int_total_err_plot[:,ii]))).astype("int") + params_prec["int"]
-                    
+                    int_total_text_fmt = r'$I_0 = {:#.{int_data_prec}g}\pm{:#.{int_err_prec}g}$'
+                    line_wvl_text_fmt = r'$\lambda_0 = {:#.{wvl_data_prec}g}\pm{:#.{wvl_err_prec}g}$'
+                    fwhm_text_fmt = r'$\Delta \lambda = {:#.{fwhm_data_prec}g}\pm{:#.{fwhm_err_prec}g}$'
+                    int_cont_text_fmt = r'$I_{{\rm bg}} = {:#.{cont_data_prec}g}\pm{:#.{cont_err_prec}g}$'
 
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.87-(ii%2)*0.45,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
-                    num2tex(int_total_err_plot[0,ii]),num2tex(int_total_err_plot[1,ii]),int_data_prec = int_data_prec,
-                    int_err_prec = params_prec["int"]),ha = 'left',va = 'center', 
-                    color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+                if self.custom_func is not None:
+                    spec_fit = self.custom_func(self.wvl_plot,*self.custom_fit)
+                    res_fit = self.data_tofit - self.custom_func(self.wvl_tofit,*self.custom_fit)                
+                elif self.same_width is True:
+                    p_fit = np.concatenate((line_wvl_plot,int_total_plot,fwhm_plot,
+                                            int_cont_plot),axis=None)
+                    spec_fit = self.multi_gaussian_same_width(self.wvl_plot,*p_fit)
+                    res_fit = self.data_tofit - self.multi_gaussian_same_width(self.wvl_tofit,*p_fit) 
+                else:
+                    p_fit = np.concatenate((line_wvl_plot,int_total_plot,fwhm_plot,
+                                            int_cont_plot),axis=None)
+                    spec_fit = self.multi_gaussian_diff_width(self.wvl_plot,*p_fit) 
+                    res_fit = self.data_tofit - self.multi_gaussian_diff_width(self.wvl_tofit,*p_fit)                           
 
-                    wvl_data_prec = np.ceil(np.log10(np.abs(line_wvl_plot[ii]))).astype("int") - \
-                        np.min(np.ceil(np.log10(line_wvl_err_plot[:,ii])).astype("int")) + params_prec["wvl"]
+                ln2, = ax.plot(self.wvl_plot,spec_fit,color=colors[2],ls="-",label = r"$I_{\rm fit}$",lw=2,
+                                zorder=16,alpha=0.7)
+
+                if self.custom_func is None:
+                    if self.line_number > 1:
+                        if self.same_width is True:
+                            for jj in range(self.line_number):
+                                line_profile = gaussian(self.wvl_plot, line_wvl_plot[jj],
+                                                        int_total_plot[jj], fwhm_plot) \
+                                                + int_cont_plot
+                                ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.8)
+                        else:
+                            for jj in range(self.line_number):
+                                line_profile = gaussian(self.wvl_plot, line_wvl_plot[jj],
+                                                        int_total_plot[jj], fwhm_plot[jj]) \
+                                                + int_cont_plot
+                                ax.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=2,alpha=0.8)   
+    
+
+                if self.err is None:
+                    ax_res.scatter(self.wvl_tofit,res_fit,marker="o",s=15,color=colors[3])
+                else:
+                    ax_res.errorbar(self.wvl_tofit,res_fit,self.err_tofit,ds='steps-mid',color=colors[3],capsize=3,
+                                    lw=2,ls="none",marker="o",markersize=5)
+                    chi2_fit = np.sum((res_fit/self.err_tofit)**2)/self.dof
+                    ax_res.text(0.98,0.9,r"$\chi^2 = {:.1f}$".format(chi2_fit),fontsize=18,
+                                ha="right",va="top",transform=ax_res.transAxes)
+
+                ax_res.axhline(0,ls="--",lw=2,color="#91989F",alpha=0.7) 
+                if xlabel is None:
+                    ax_res.set_xlabel(r"$\textrm{Wavelength}$",fontsize=18)
+                else:
+                    ax_res.set_xlabel(xlabel,fontsize=18)
+                ax_res.set_ylabel(r"$r$",fontsize=18)
+                ax_res.tick_params(which="both",labelsize=18,top=True,right=True)
+                ax_res.tick_params(which="major",width=1.2,length=8,direction="in")
+                ax_res.tick_params(which="minor",width=1.2,length=4,direction="in")
+                ax_res.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+                ax_res.yaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+
+                if xlim is not None:
+                    ax_res.set_xlim(xlim)
+                if self.mask is not None:
+                    for ii, mask_ in enumerate(self.mask):
+                        ax_res.axvspan(mask_[0],mask_[1],color=colors[4],alpha=0.4)
 
 
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.78-(ii%2)*0.45,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
-                    num2tex(line_wvl_err_plot[0,ii]),num2tex(line_wvl_err_plot[1,ii]),wvl_data_prec = wvl_data_prec,
-                    wvl_err_prec = params_prec["wvl"]),ha = 'left',va = 'center', 
-                    color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+            if xlim is not None:
+                ax.set_xlim(xlim)
 
-                    if self.same_width is True:
+            if plot_title is not None:
+                ax.set_title(plot_title,fontsize=18)
 
-                        fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot))).astype("int") - \
-                            np.min(np.ceil(np.log10(fwhm_err_plot)).astype("int")) + params_prec["fwhm"]
-
-                        ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot),
-                        num2tex(fwhm_err_plot[0]),num2tex(fwhm_err_plot[1]),fwhm_data_prec = fwhm_data_prec,
-                        fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
-                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
-                    else:
-                        fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot[ii]))).astype("int") - \
-                            np.min(np.ceil(np.log10(fwhm_err_plot[:,ii]))).astype("int") + params_prec["fwhm"]
-
-                        ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
-                        num2tex(fwhm_err_plot[0,ii]),num2tex(fwhm_err_plot[1,ii]),fwhm_data_prec = fwhm_data_prec,
-                        fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
-                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
-                    
-                    cont_data_prec = np.ceil(np.log10(np.abs(int_cont_plot))).astype("int") - \
-                        np.min(np.ceil(np.log10(int_cont_err_plot))).astype("int") + params_prec["cont"]
-
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.60-(ii%2)*0.45,int_cont_text_fmt.format(num2tex(int_cont_plot),
-                        num2tex(int_cont_err_plot[0]),num2tex(int_cont_err_plot[1]),cont_data_prec = cont_data_prec,
-                        cont_err_prec = params_prec["cont"]),ha = 'left',va = 'center', 
-                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes) 
-            else:
-                for ii in range(self.line_number):
-                    int_data_prec = np.ceil(np.log10(np.abs(int_total_plot[ii]))).astype("int") - \
-                        np.ceil(np.log10(int_total_err_plot[ii])).astype("int") + params_prec["int"]
-
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.87-(ii%2)*0.45,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
-                    num2tex(int_total_err_plot[ii]),int_data_prec = int_data_prec,int_err_prec = params_prec["int"]),ha = 'left',va = 'center', 
-                    color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
-
-                    wvl_data_prec = np.ceil(np.log10(np.abs(line_wvl_plot[ii]))).astype("int") - \
-                        np.ceil(np.log10(line_wvl_err_plot[ii])).astype("int") + params_prec["wvl"]
-
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.78-(ii%2)*0.45,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
-                    num2tex(line_wvl_err_plot[ii]),wvl_data_prec = wvl_data_prec,wvl_err_prec = params_prec["wvl"]),ha = 'left',va = 'center', 
-                    color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
-
-                    if self.same_width is True:
-                        fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot))).astype("int") - \
-                            np.ceil(np.log10(fwhm_err_plot)).astype("int") + params_prec["fwhm"]
-                        ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot),
-                        num2tex(fwhm_err_plot),fwhm_data_prec = fwhm_data_prec,fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
-                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
-                    else:
-                        fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot[ii]))).astype("int") - \
-                            np.ceil(np.log10(fwhm_err_plot[ii])).astype("int") + params_prec["fwhm"]
-                        ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
-                        num2tex(fwhm_err_plot[ii]),fwhm_data_prec = fwhm_data_prec,fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
-                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
-                    
-                    cont_data_prec = np.ceil(np.log10(np.abs(int_cont_plot))).astype("int") - \
-                        np.ceil(np.log10(int_cont_err_plot)).astype("int") + params_prec["cont"]
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.60-(ii%2)*0.45,int_cont_text_fmt.format(num2tex(int_cont_plot),
-                        num2tex(int_cont_err_plot),cont_data_prec = cont_data_prec,cont_err_prec = params_prec["cont"]),ha = 'left',va = 'center', 
-                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
-            
-            if self.line_number > 1:
-                if line_caption is None:
-                    line_caption = []
+            if (plot_params and plot_fit) is True:
+                gs_text = gs_fig[1].subgridspec(2, 1,height_ratios=[5,2])
+                text_ncol = np.ceil(self.line_number/2)
+                ax_text = fig.add_subplot(gs_text[0])
+                ax_text.axis("off")
+                if plot_mcmc or plot_hmc:
                     for ii in range(self.line_number):
-                        line_caption.append(r"\textbf{\textsc{"+num_to_roman(ii+1,uppercase=False)+r"}}")
+                        int_data_prec = np.ceil(np.log10(np.abs(int_total_plot[ii]))).astype("int") - \
+                            np.min(np.ceil(np.log10(int_total_err_plot[:,ii]))).astype("int") + params_prec["int"]
+                        
+
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.87-(ii%2)*0.45,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
+                        num2tex(int_total_err_plot[0,ii]),num2tex(int_total_err_plot[1,ii]),int_data_prec = int_data_prec,
+                        int_err_prec = params_prec["int"]),ha = 'left',va = 'center', 
+                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+
+                        wvl_data_prec = np.ceil(np.log10(np.abs(line_wvl_plot[ii]))).astype("int") - \
+                            np.min(np.ceil(np.log10(line_wvl_err_plot[:,ii])).astype("int")) + params_prec["wvl"]
+
+
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.78-(ii%2)*0.45,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
+                        num2tex(line_wvl_err_plot[0,ii]),num2tex(line_wvl_err_plot[1,ii]),wvl_data_prec = wvl_data_prec,
+                        wvl_err_prec = params_prec["wvl"]),ha = 'left',va = 'center', 
+                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+
+                        if self.same_width is True:
+
+                            fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot))).astype("int") - \
+                                np.min(np.ceil(np.log10(fwhm_err_plot)).astype("int")) + params_prec["fwhm"]
+
+                            ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot),
+                            num2tex(fwhm_err_plot[0]),num2tex(fwhm_err_plot[1]),fwhm_data_prec = fwhm_data_prec,
+                            fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
+                            color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+                        else:
+                            fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot[ii]))).astype("int") - \
+                                np.min(np.ceil(np.log10(fwhm_err_plot[:,ii]))).astype("int") + params_prec["fwhm"]
+
+                            ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
+                            num2tex(fwhm_err_plot[0,ii]),num2tex(fwhm_err_plot[1,ii]),fwhm_data_prec = fwhm_data_prec,
+                            fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
+                            color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+                        
+                        cont_data_prec = np.ceil(np.log10(np.abs(int_cont_plot))).astype("int") - \
+                            np.min(np.ceil(np.log10(int_cont_err_plot))).astype("int") + params_prec["cont"]
+
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.60-(ii%2)*0.45,int_cont_text_fmt.format(num2tex(int_cont_plot),
+                            num2tex(int_cont_err_plot[0]),num2tex(int_cont_err_plot[1]),cont_data_prec = cont_data_prec,
+                            cont_err_prec = params_prec["cont"]),ha = 'left',va = 'center', 
+                            color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes) 
+                else:
+                    for ii in range(self.line_number):
+                        int_data_prec = np.ceil(np.log10(np.abs(int_total_plot[ii]))).astype("int") - \
+                            np.ceil(np.log10(int_total_err_plot[ii])).astype("int") + params_prec["int"]
+
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.87-(ii%2)*0.45,int_total_text_fmt.format(num2tex(int_total_plot[ii]),
+                        num2tex(int_total_err_plot[ii]),int_data_prec = int_data_prec,int_err_prec = params_prec["int"]),ha = 'left',va = 'center', 
+                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+
+                        wvl_data_prec = np.ceil(np.log10(np.abs(line_wvl_plot[ii]))).astype("int") - \
+                            np.ceil(np.log10(line_wvl_err_plot[ii])).astype("int") + params_prec["wvl"]
+
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.78-(ii%2)*0.45,line_wvl_text_fmt.format(num2tex(line_wvl_plot[ii]),
+                        num2tex(line_wvl_err_plot[ii]),wvl_data_prec = wvl_data_prec,wvl_err_prec = params_prec["wvl"]),ha = 'left',va = 'center', 
+                        color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+
+                        if self.same_width is True:
+                            fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot))).astype("int") - \
+                                np.ceil(np.log10(fwhm_err_plot)).astype("int") + params_prec["fwhm"]
+                            ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot),
+                            num2tex(fwhm_err_plot),fwhm_data_prec = fwhm_data_prec,fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
+                            color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+                        else:
+                            fwhm_data_prec = np.ceil(np.log10(np.abs(fwhm_plot[ii]))).astype("int") - \
+                                np.ceil(np.log10(fwhm_err_plot[ii])).astype("int") + params_prec["fwhm"]
+                            ax_text.text(0.05+(ii//2)/text_ncol,0.69-(ii%2)*0.45,fwhm_text_fmt.format(num2tex(fwhm_plot[ii]),
+                            num2tex(fwhm_err_plot[ii]),fwhm_data_prec = fwhm_data_prec,fwhm_err_prec = params_prec["fwhm"]),ha = 'left',va = 'center', 
+                            color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
+                        
+                        cont_data_prec = np.ceil(np.log10(np.abs(int_cont_plot))).astype("int") - \
+                            np.ceil(np.log10(int_cont_err_plot)).astype("int") + params_prec["cont"]
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.60-(ii%2)*0.45,int_cont_text_fmt.format(num2tex(int_cont_plot),
+                            num2tex(int_cont_err_plot),cont_data_prec = cont_data_prec,cont_err_prec = params_prec["cont"]),ha = 'left',va = 'center', 
+                            color = 'black',fontsize = 18,linespacing=1.5,transform=ax_text.transAxes)
                 
-                for ii in range(self.line_number):
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.95-(ii%2)*0.45,line_caption[ii],
-                    ha = 'left',va = 'center',color = 'black',fontsize = 18,linespacing=1.5,
-                    transform=ax_text.transAxes)
-
-                    ax_text.axhline(0.915-(ii%2)*0.45,xmin=0.05+(ii//2)/text_ncol,xmax=(ii//2+0.8)/text_ncol,color="#787878",alpha=0.7,lw=4)
-                    if self.same_width is True:
-                        ax.text(self.line_wvl_fit[ii],2.355*self.int_total_fit[ii]/self.fwhm_fit/np.sqrt(2*np.pi)+\
-                            0.05*np.diff(ax.get_ylim()) + self.int_cont_fit,line_caption[ii],
-                        ha = 'center',va = 'bottom',color = colors[3],fontsize = 18,linespacing=1.5)
-
-                    else:
-                        ax.text(self.line_wvl_fit[ii],2.355*self.int_total_fit[ii]/self.fwhm_fit[ii]/np.sqrt(2*np.pi)+\
-                            0.05*np.diff(ax.get_ylim()) + self.int_cont_fit,line_caption[ii],
-                        ha = 'center',va = 'bottom',color = colors[3],fontsize = 18,linespacing=1.5)
-
+                if self.line_number > 1:
+                    if line_caption is None:
+                        line_caption = []
+                        for ii in range(self.line_number):
+                            line_caption.append(r"\textbf{\textsc{"+num_to_roman(ii+1,uppercase=False)+r"}}")
                     
+                    for ii in range(self.line_number):
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.95-(ii%2)*0.45,line_caption[ii],
+                        ha = 'left',va = 'center',color = 'black',fontsize = 18,linespacing=1.5,
+                        transform=ax_text.transAxes)
 
-                ax.set_ylim(top=ax.get_ylim()[1]*1.07)
-            else:
-                if line_caption is not None:
-                    ax_text.text(0.05+(ii//2)/text_ncol,0.95-(ii%2)*0.45,line_caption,
-                    ha = 'left',va = 'center',color = 'black',fontsize = 18,linespacing=1.5,
-                    transform=ax_text.transAxes)
+                        ax_text.axhline(0.915-(ii%2)*0.45,xmin=0.05+(ii//2)/text_ncol,xmax=(ii//2+0.8)/text_ncol,color="#787878",alpha=0.7,lw=4)
+                        if self.same_width is True:
+                            ax.text(self.line_wvl_fit[ii],2.355*self.int_total_fit[ii]/self.fwhm_fit/np.sqrt(2*np.pi)+\
+                                0.05*np.diff(ax.get_ylim()) + self.int_cont_fit,line_caption[ii],
+                            ha = 'center',va = 'bottom',color = colors[3],fontsize = 18,linespacing=1.5)
 
-        if save_fig is True:
-            plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
+                        else:
+                            ax.text(self.line_wvl_fit[ii],2.355*self.int_total_fit[ii]/self.fwhm_fit[ii]/np.sqrt(2*np.pi)+\
+                                0.05*np.diff(ax.get_ylim()) + self.int_cont_fit,line_caption[ii],
+                            ha = 'center',va = 'bottom',color = colors[3],fontsize = 18,linespacing=1.5)
 
-        return ax
+                        
+
+                    ax.set_ylim(top=ax.get_ylim()[1]*1.07)
+                else:
+                    if line_caption is not None:
+                        ax_text.text(0.05+(ii//2)/text_ncol,0.95-(ii%2)*0.45,line_caption,
+                        ha = 'left',va = 'center',color = 'black',fontsize = 18,linespacing=1.5,
+                        transform=ax_text.transAxes)
+
+            if save_fig is True:
+                plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
+
+            plt.show()
+
+            return ax
 
     def multi_gaussian_same_width(self,wvl,*args):
         '''
@@ -1096,87 +1113,88 @@ class SpectrumFitRow:
 
         '''
 
-    
-        nrows = int(np.ceil(self.frame_number/4.))
-        fig, axes = plt.subplots(nrows,4,figsize=(16,nrows*3),constrained_layout=True)
+        with rc_context(rc_context_dict):
+            nrows = int(np.ceil(self.frame_number/4.))
+            fig, axes = plt.subplots(nrows,4,figsize=(16,nrows*3),constrained_layout=True)
 
-        if color_style == "Red":
-            colors = ["#E87A90","#FEDFE1","black","#E9002D","#DBD0D0"]
-        elif color_style == "Green":
-            colors = ["#00896C","#A8D8B9","black","#33A6B8","#DBD0D0"]
-        elif color_style == "Yellow":
-            colors = ["#FFBA84","#FAD689","black","#FC9F4D","#DBD0D0"]
-        elif color_style == "Blue":
-            colors = ["#3A8FB7","#A5DEE4","black","#58B2DC","#DBD0D0"]
-        elif color_style == "Purple":
-            colors = ["#8F77B5","#B28FCE","black","#6A4C9C","#DBD0D0"]
+            if color_style == "Red":
+                colors = ["#E87A90","#FEDFE1","black","#E9002D","#DBD0D0"]
+            elif color_style == "Green":
+                colors = ["#00896C","#A8D8B9","black","#33A6B8","#DBD0D0"]
+            elif color_style == "Yellow":
+                colors = ["#FFBA84","#FAD689","black","#FC9F4D","#DBD0D0"]
+            elif color_style == "Blue":
+                colors = ["#3A8FB7","#A5DEE4","black","#58B2DC","#DBD0D0"]
+            elif color_style == "Purple":
+                colors = ["#8F77B5","#B28FCE","black","#6A4C9C","#DBD0D0"]
 
-        for ii, ax_ in enumerate(axes.flatten()):
-            if ii < self.frame_number:
-                if self.err is None:
-                    ln1, = ax_.step(self.wvl,self.data[ii],where="mid",color=colors[0],label = r"$I_{\rm obs}$",lw=2)
-                else:
-                    ln1 = ax_.errorbar(self.wvl,self.data[ii],yerr = self.err[ii],ds='steps-mid',color=colors[0],capsize=2,
-                    label = r"$I_{\rm obs}$",lw=1.5)
-                
-                ax_.fill_between(self.wvl,np.ones_like(self.wvl)*np.min(self.data[ii]),self.data[ii],
-                    step='mid',color=colors[1],alpha=0.6)
-
-                if plot_fit is True:
-                    if self.same_width is True:
-                        p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
-                                                self.int_cont_fit[ii]),axis=None)
-                        spec_fit = self.single_fit_list[ii].multi_gaussian_same_width(self.wvl_plot,*p_fit)
+            for ii, ax_ in enumerate(axes.flatten()):
+                if ii < self.frame_number:
+                    if self.err is None:
+                        ln1, = ax_.step(self.wvl,self.data[ii],where="mid",color=colors[0],label = r"$I_{\rm obs}$",lw=2)
                     else:
-                        p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
-                                                self.int_cont_fit[ii]),axis=None)
-                        spec_fit = self.single_fit_list[ii].multi_gaussian_diff_width(self.wvl_plot,*p_fit)                            
+                        ln1 = ax_.errorbar(self.wvl,self.data[ii],yerr = self.err[ii],ds='steps-mid',color=colors[0],capsize=2,
+                        label = r"$I_{\rm obs}$",lw=1.5)
+                    
+                    ax_.fill_between(self.wvl,np.ones_like(self.wvl)*np.min(self.data[ii]),self.data[ii],
+                        step='mid',color=colors[1],alpha=0.6)
 
-                    ln2, = ax_.plot(self.wvl_plot,spec_fit,color=colors[2],ls="-",label = r"$I_{\rm fit}$",lw=1.5,
-                    zorder=16,alpha=0.7)
-
-                    if self.line_number > 1:
+                    if plot_fit is True:
                         if self.same_width is True:
-                            for jj in range(self.line_number):
-                                line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
-                                                        self.int_total_fit[ii,jj], self.fwhm_fit[ii]) \
-                                                + self.int_cont_fit[ii]
-                                ax_.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=1.5,alpha=0.7)
+                            p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
+                                                    self.int_cont_fit[ii]),axis=None)
+                            spec_fit = self.single_fit_list[ii].multi_gaussian_same_width(self.wvl_plot,*p_fit)
                         else:
-                            for jj in range(self.line_number):
-                                line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
-                                                        self.int_total_fit[ii,jj], self.fwhm_fit[ii,jj]) \
-                                                + self.int_cont_fit[ii]
-                                ax_.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=1.5,alpha=0.7)   
-                ax_.tick_params(which="major",length=4,direction="in")
-                if xlim is not None:
-                    ax_.set_xlim(xlim)  
-                if self.mask is not None:
-                    for jj, mask_ in enumerate(self.mask):
-                        ax_.axvspan(mask_[0],mask_[1],color=colors[4],alpha=0.4)
+                            p_fit = np.concatenate((self.line_wvl_fit[ii],self.int_total_fit[ii],self.fwhm_fit[ii],
+                                                    self.int_cont_fit[ii]),axis=None)
+                            spec_fit = self.single_fit_list[ii].multi_gaussian_diff_width(self.wvl_plot,*p_fit)                            
+
+                        ln2, = ax_.plot(self.wvl_plot,spec_fit,color=colors[2],ls="-",label = r"$I_{\rm fit}$",lw=1.5,
+                        zorder=16,alpha=0.7)
+
+                        if self.line_number > 1:
+                            if self.same_width is True:
+                                for jj in range(self.line_number):
+                                    line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
+                                                            self.int_total_fit[ii,jj], self.fwhm_fit[ii]) \
+                                                    + self.int_cont_fit[ii]
+                                    ax_.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=1.5,alpha=0.7)
+                            else:
+                                for jj in range(self.line_number):
+                                    line_profile = gaussian(self.wvl_plot, self.line_wvl_fit[ii,jj],
+                                                            self.int_total_fit[ii,jj], self.fwhm_fit[ii,jj]) \
+                                                    + self.int_cont_fit[ii]
+                                    ax_.plot(self.wvl_plot,line_profile,color=colors[3],ls="--",lw=1.5,alpha=0.7)   
+                    ax_.tick_params(which="major",length=4,direction="in")
+                    if xlim is not None:
+                        ax_.set_xlim(xlim)  
+                    if self.mask is not None:
+                        for jj, mask_ in enumerate(self.mask):
+                            ax_.axvspan(mask_[0],mask_[1],color=colors[4],alpha=0.4)
+                else:
+                    ax_.axis("off")
+            for ii in range(-4-(4*nrows-self.frame_number),0-(4*nrows-self.frame_number)):
+                if xlabel is None:
+                    axes.flatten()[ii].set_xlabel(r"$\textrm{Wavelength}$",fontsize=12)
+                else:
+                    axes.flatten()[ii].set_xlabel(xlabel,fontsize=12)
+            if nrows == 1:
+                if ylabel is None:
+                    axes[0].set_ylabel("Intensity",fontsize=12)
+                else:
+                    axes[0].set_ylabel(ylabel,fontsize=12)
             else:
-                ax_.axis("off")
-        for ii in range(-4-(4*nrows-self.frame_number),0-(4*nrows-self.frame_number)):
-            if xlabel is None:
-                axes.flatten()[ii].set_xlabel(r"$\textrm{Wavelength}$",fontsize=12)
-            else:
-                axes.flatten()[ii].set_xlabel(xlabel,fontsize=12)
-        if nrows == 1:
-            if ylabel is None:
-                axes[0].set_ylabel("Intensity",fontsize=12)
-            else:
-                axes[0].set_ylabel(ylabel,fontsize=12)
-        else:
-            if ylabel is None:
-                for ii in range(nrows):
-                    axes[ii,0].set_ylabel("Intensity",fontsize=12)
-            else:
-                for ii in range(nrows):
-                    axes[ii,0].set_ylabel(ylabel,fontsize=12)
-        if save_fig is True:
-            plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
-        
-        return axes
+                if ylabel is None:
+                    for ii in range(nrows):
+                        axes[ii,0].set_ylabel("Intensity",fontsize=12)
+                else:
+                    for ii in range(nrows):
+                        axes[ii,0].set_ylabel(ylabel,fontsize=12)
+            if save_fig is True:
+                plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
+
+            plt.show()
+            return axes
 
     def plot_single(self,frame_index,*args,**kwargs):
         ax = self.single_fit_list[frame_index].plot(*args,**kwargs)
@@ -1186,65 +1204,69 @@ class SpectrumFitRow:
                         xdata=None,xlabel=None,ylabel=None,xlim=None,
                         ylim=None,line_label=None):
         
-        if xdata is None:
-            xdata = np.arange(self.frame_number)
 
-        if ylabel is None:
+        with rc_context(rc_context_dict):
+            if xdata is None:
+                xdata = np.arange(self.frame_number)
+
+            if ylabel is None:
+                if var == "fwhm":
+                    ylabel = r"FWHM $\Delta \lambda$"
+                if var == "int":
+                    ylabel = r"Total Intensity $I_0$"
+                if var == "wvl":
+                    ylabel = r"Line Core Wavelength $\lambda_0$" 
+            
+            if line_label is None:
+                line_label = []
+                for ii in range(self.line_number):
+                    line_label.append("{:.1f}".format(self.line_wvl_fit[0,ii]))
+            
             if var == "fwhm":
-                ylabel = r"FWHM $\Delta \lambda$"
-            if var == "int":
-                ylabel = r"Total Intensity $I_0$"
-            if var == "wvl":
-                ylabel = r"Line Core Wavelength $\lambda_0$" 
-        
-        if line_label is None:
-            line_label = []
-            for ii in range(self.line_number):
-                line_label.append("{:.1f}".format(self.line_wvl_fit[0,ii]))
-        
-        if var == "fwhm":
-            if plot_hmc:
-                pass
-            elif plot_mcmc:
-                pass
-            else:
-                ydata = np.squeeze(self.fwhm_fit)
-                yerr = np.squeeze(self.fwhm_err)
-        elif var == "int":
-            if plot_hmc:
-                pass
-            elif plot_mcmc:
-                pass
-            else:
-                ydata = np.squeeze(self.int_total_fit)
-                yerr = np.squeeze(self.int_total_err)
-        elif var == "wvl":  
-            if plot_hmc:
-                pass
-            elif plot_mcmc:
-                pass
-            else:
-                ydata = np.squeeze(self.line_wvl_fit)
-                yerr = np.squeeze(self.line_wvl_err)
-        fig, ax = plt.subplots(figsize=(8,6),constrained_layout=True)
+                if plot_hmc:
+                    pass
+                elif plot_mcmc:
+                    pass
+                else:
+                    ydata = np.squeeze(self.fwhm_fit)
+                    yerr = np.squeeze(self.fwhm_err)
+            elif var == "int":
+                if plot_hmc:
+                    pass
+                elif plot_mcmc:
+                    pass
+                else:
+                    ydata = np.squeeze(self.int_total_fit)
+                    yerr = np.squeeze(self.int_total_err)
+            elif var == "wvl":  
+                if plot_hmc:
+                    pass
+                elif plot_mcmc:
+                    pass
+                else:
+                    ydata = np.squeeze(self.line_wvl_fit)
+                    yerr = np.squeeze(self.line_wvl_err)
+            fig, ax = plt.subplots(figsize=(8,6),constrained_layout=True)
 
-        if (self.same_width is True) or (self.line_number == 1):
-            ax.errorbar(xdata,ydata,yerr=yerr,lw=2,capsize=3,marker="o",markersize=5)
-        else:
-            for ii in range(self.line_number):
-                ax.errorbar(xdata,ydata[:,ii],yerr=yerr[:,ii],lw=2,capsize=3,marker="o",markersize=5,
-                            label=line_label[ii])
-        
-        ax.tick_params(labelsize=18,direction="in")
-        if xlabel is not None:
-            ax.set_xlabel(xlabel,fontsize=18)
-        ax.set_ylabel(ylabel,fontsize=18)
-        ax.legend(fontsize=18,frameon=False)
-        if xlim is not None:
-            ax.set_xlim(xlim)
-        if ylim is not None:
-            ax.set_ylim(ylim)
-        return ax 
+            if (self.same_width is True) or (self.line_number == 1):
+                ax.errorbar(xdata,ydata,yerr=yerr,lw=2,capsize=3,marker="o",markersize=5)
+            else:
+                for ii in range(self.line_number):
+                    ax.errorbar(xdata,ydata[:,ii],yerr=yerr[:,ii],lw=2,capsize=3,marker="o",markersize=5,
+                                label=line_label[ii])
+            
+            ax.tick_params(labelsize=18,direction="in")
+            if xlabel is not None:
+                ax.set_xlabel(xlabel,fontsize=18)
+            ax.set_ylabel(ylabel,fontsize=18)
+            ax.legend(fontsize=18,frameon=False)
+            if xlim is not None:
+                ax.set_xlim(xlim)
+            if ylim is not None:
+                ax.set_ylim(ylim)
+            
+            plt.show()
+            return ax 
 
     def return_dict(self):
         return {"line_wvl_fit":self.line_wvl_fit, "line_wvl_err":self.line_wvl_err,
@@ -1486,73 +1508,76 @@ class SpectrumFit2D:
                     extent=None,vmin=None,vmax=None,scale=None,ax=None,title=None,cmap=None,
                     xlabel=None,ylabel=None,ref_wvl=None,vel_corr="column",inst_width=None,
                     aspect=None,return_data=False):
-        if param == "int":
-            data_to_plot = self.int_total_fit[:,:,line_index]
-        elif param == "wvl":
-            data_to_plot = self.line_wvl_fit[:,:,line_index]
-        elif param == "vel":
-            data_to_plot = (ref_wvl - self.line_wvl_fit[:,:,line_index])/ref_wvl*const.c.cgs.value/1e5
-            if vel_corr == "column":
-                data_to_plot = data_to_plot - np.nanmedian(data_to_plot,axis=0)[np.newaxis,:]
-                print("Doppler velocity corrected by the median of each raster.")
-            elif vel_corr == "image":
-                data_to_plot = data_to_plot - np.nanmedian(data_to_plot)
-                print("Doppler velocity corrected by the median of the image.")
-        elif (param == "fwhm") or (param == "veff"):
-            if type(self.same_width) is list:
-                data_to_plot = self.fwhm_fit[:,:,line_index]
-            elif self.same_width is True:
-                data_to_plot = self.fwhm_fit
-            else:
-                data_to_plot = self.fwhm_fit[:,:,line_index]
-
-            if inst_width is not None:
-                if isinstance(inst_width, np.ndarray):
-                    data_to_plot = np.sqrt(data_to_plot**2 - inst_width[:,np.newaxis]**2)
+        with rc_context(rc_context_dict):
+            if param == "int":
+                data_to_plot = self.int_total_fit[:,:,line_index]
+            elif param == "wvl":
+                data_to_plot = self.line_wvl_fit[:,:,line_index]
+            elif param == "vel":
+                data_to_plot = (ref_wvl - self.line_wvl_fit[:,:,line_index])/ref_wvl*const.c.cgs.value/1e5
+                if vel_corr == "column":
+                    data_to_plot = data_to_plot - np.nanmedian(data_to_plot,axis=0)[np.newaxis,:]
+                    print("Doppler velocity corrected by the median of each raster.")
+                elif vel_corr == "image":
+                    data_to_plot = data_to_plot - np.nanmedian(data_to_plot)
+                    print("Doppler velocity corrected by the median of the image.")
+            elif (param == "fwhm") or (param == "veff"):
+                if type(self.same_width) is list:
+                    data_to_plot = self.fwhm_fit[:,:,line_index]
+                elif self.same_width is True:
+                    data_to_plot = self.fwhm_fit
                 else:
-                    data_to_plot = np.sqrt(data_to_plot**2 - inst_width**2)
-                print("Instrumental width corrected.")
+                    data_to_plot = self.fwhm_fit[:,:,line_index]
 
-            if param == "veff":
-                data_to_plot = data_to_plot/ref_wvl/np.sqrt(4*np.log(2))*const.c.cgs.value/1e5
-                
-        elif param == "cont":
-            data_to_plot = self.int_cont_fit
+                if inst_width is not None:
+                    if isinstance(inst_width, np.ndarray):
+                        data_to_plot = np.sqrt(data_to_plot**2 - inst_width[:,np.newaxis]**2)
+                    else:
+                        data_to_plot = np.sqrt(data_to_plot**2 - inst_width**2)
+                    print("Instrumental width corrected.")
 
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(7,7),constrained_layout=True)
+                if param == "veff":
+                    data_to_plot = data_to_plot/ref_wvl/np.sqrt(4*np.log(2))*const.c.cgs.value/1e5
+                    
+            elif param == "cont":
+                data_to_plot = self.int_cont_fit
 
-        if scale is None:
-            norm = ImageNormalize(data_to_plot,vmin=vmin,vmax=vmax)
-        elif scale == "sqrt":
-            norm = ImageNormalize(data_to_plot,vmin=vmin,vmax=vmax,stretch=SqrtStretch())
-        elif scale == "log":
-            norm = ImageNormalize(data_to_plot,vmin=vmin,vmax=vmax,stretch=LogStretch())
+            if ax is None:
+                fig, ax = plt.subplots(figsize=(7,7),constrained_layout=True)
 
-        if cmap is None:
-            if param == "vel":
-                cmap = "bwr_r"
-            else:
-                cmap = "viridis"
+            if scale is None:
+                norm = ImageNormalize(data_to_plot,vmin=vmin,vmax=vmax)
+            elif scale == "sqrt":
+                norm = ImageNormalize(data_to_plot,vmin=vmin,vmax=vmax,stretch=SqrtStretch())
+            elif scale == "log":
+                norm = ImageNormalize(data_to_plot,vmin=vmin,vmax=vmax,stretch=LogStretch())
 
-        if (xcoord is not None) and (ycoord is not None):
-            im = ax.pcolormesh(xcoord, ycoord, data_to_plot, rasterized=True,cmap=cmap,norm=norm)
-        elif (extent is not None):
-            im = ax.imshow(data_to_plot, origin="lower",cmap=cmap,extent=extent,norm=norm)
-        elif (aspect is not None):
-            im = ax.imshow(data_to_plot, origin="lower",cmap=cmap,norm=norm,aspect=aspect)
-        
-        plot_colorbar(im, ax, width="5%")
+            if cmap is None:
+                if param == "vel":
+                    cmap = "bwr_r"
+                else:
+                    cmap = "viridis"
 
-        ax.set_title(title,fontsize=16)
-        if xlabel is not None:
-            ax.set_xlabel(xlabel,fontsize=16)
-        if ylabel is not None:
-            ax.set_ylabel(ylabel,fontsize=16)
-        ax.tick_params(labelsize=16)
+            if (xcoord is not None) and (ycoord is not None):
+                im = ax.pcolormesh(xcoord, ycoord, data_to_plot, rasterized=True,cmap=cmap,norm=norm)
+            elif (extent is not None):
+                im = ax.imshow(data_to_plot, origin="lower",cmap=cmap,extent=extent,norm=norm)
+            elif (aspect is not None):
+                im = ax.imshow(data_to_plot, origin="lower",cmap=cmap,norm=norm,aspect=aspect)
+            
+            plot_colorbar(im, ax, width="5%")
 
-        if return_data:
-            return data_to_plot
+            ax.set_title(title,fontsize=16)
+            if xlabel is not None:
+                ax.set_xlabel(xlabel,fontsize=16)
+            if ylabel is not None:
+                ax.set_ylabel(ylabel,fontsize=16)
+            ax.tick_params(labelsize=16)
+
+            if return_data:
+                return data_to_plot
+
+            plt.show()
 
 
 
