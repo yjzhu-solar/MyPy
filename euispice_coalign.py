@@ -21,9 +21,14 @@ import argparse
 
 
 def create_syn_raster(spice_file, eui_files, spice_window,
-                      save_filename=None):
+                      save_filename=None, solar_rotation=True):
     
     spice_dataset = read_spice_l2_fits(spice_file)
+
+    # copy the WCSDVARR
+    with fits.open(spice_file) as hduls:
+        spice_solarx_shift = hduls[-2].data.copy()
+        spice_solary_shift = hduls[-1].data.copy()
     
     if isinstance(spice_window, int):
         spice_window = spice_dataset[list(spice_dataset.keys())[0]]
@@ -57,15 +62,24 @@ def create_syn_raster(spice_file, eui_files, spice_window,
     for ii in range(spice_nt):
         # solar_orbiter_loc = get_horizons_coord('solar orbiter',spice_time_obs[ii])
 
-        spice_skycoord = SkyCoord(spice_skycoord_rough[:,ii].Tx.to(u.arcsec), 
-                                  spice_skycoord_rough[:,ii].Ty.to(u.arcsec),
+        spice_skycoord = SkyCoord(spice_skycoord_rough[:,ii].Tx.to(u.arcsec) + spice_solarx_shift[ii]*u.arcsec, 
+                                  spice_skycoord_rough[:,ii].Ty.to(u.arcsec) + spice_solary_shift[ii]*u.arcsec,
                                   frame='helioprojective',obstime=spice_time_obs[ii], 
                                   observer=solar_orbiter_loc[ii], 
                                   rsun=eui_maps[0].meta['rsun_ref']*u.m,)
 
         eui_map_index = find_closest_frame(spice_time_obs[ii], eui_time_obs)
 
-        with propagate_with_solar_surface(rotation_model='rigid'):
+        if solar_rotation:
+            with propagate_with_solar_surface(rotation_model='rigid'):
+                spice_skycoord_pixel = eui_maps[eui_map_index].wcs.world_to_pixel(spice_skycoord)
+
+                eui_map_interpolator = RegularGridInterpolator((np.arange(eui_maps[eui_map_index].data.shape[0]),
+                                                                np.arange(eui_maps[eui_map_index].data.shape[1])),
+                                                                eui_maps[eui_map_index].data, bounds_error=False, 
+                                                                method="cubic")
+                eui_syn_raster_image[:,ii] = eui_map_interpolator((spice_skycoord_pixel[1], spice_skycoord_pixel[0]))
+        else:
             spice_skycoord_pixel = eui_maps[eui_map_index].wcs.world_to_pixel(spice_skycoord)
 
             eui_map_interpolator = RegularGridInterpolator((np.arange(eui_maps[eui_map_index].data.shape[0]),
@@ -80,7 +94,7 @@ def create_syn_raster(spice_file, eui_files, spice_window,
     return eui_syn_raster_image
 
 def calculate_eui_spice_shift(spice_file, eui_files, spice_window, eui_syn_raster_image,
-                              rotation=True):
+                              rotation=True,):
     spice_dataset = read_spice_l2_fits(spice_file)
     
     if isinstance(spice_window, int):
@@ -275,6 +289,11 @@ if __name__ == '__main__':
     #                                 eui_files,'Ne VIII 770 - Peak','/home/yjzhu/Downloads/test.npz', rotation=True)
     # print(xshift_optimal, yshift_optimal, rot_matrix_optimal, rot_angle_optimal)
 
+    '''
+    example:
+    python euispice_coalign.py path_to_spice path_to_eui_file_dir -w 'Ne VIII 770 - Peak' -s 'save_filename'
+    '''
+
     parser = argparse.ArgumentParser(description='Co-align EUI synoptic raster with SPICE data')
     parser.add_argument('spice_file', type=str, help='SPICE file')
     parser.add_argument('eui_files', type=str, help='EUI files')
@@ -289,7 +308,8 @@ if __name__ == '__main__':
     eui_files = sorted(glob(args.eui_files))
 
     if args.synthetic_rater_filename is None:
-        eui_syn_raster_image = create_syn_raster(args.spice_file, eui_files, args.spice_window)
+        synthetic_rater_filename = os.path.join(os.path.dirname(eui_files[0]), 'eui_syn_raster_image_for_spice.npz')
+        eui_syn_raster_image = create_syn_raster(args.spice_file, eui_files, args.spice_window, synthetic_rater_filename)
     
     xshift_optimal, yshift_optimal, rot_matrix_optimal, rot_angle_optimal = \
         calculate_eui_spice_shift(args.spice_file, eui_files, args.spice_window, eui_syn_raster_image, rotation=args.rotation)
