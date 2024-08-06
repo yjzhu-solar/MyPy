@@ -831,7 +831,7 @@ class SpectrumFitSingle:
 
             plt.show()
 
-            return ax
+        return ax
 
     def multi_gaussian_same_width(self,wvl,*args):
         '''
@@ -1194,7 +1194,7 @@ class SpectrumFitRow:
                 plt.savefig(fname=save_fname,format=save_fmt,dpi=save_dpi)
 
             plt.show()
-            return axes
+        return axes
 
     def plot_single(self,frame_index,*args,**kwargs):
         ax = self.single_fit_list[frame_index].plot(*args,**kwargs)
@@ -1266,7 +1266,8 @@ class SpectrumFitRow:
                 ax.set_ylim(ylim)
             
             plt.show()
-            return ax 
+            
+        return ax 
 
     def return_dict(self):
         return {"line_wvl_fit":self.line_wvl_fit, "line_wvl_err":self.line_wvl_err,
