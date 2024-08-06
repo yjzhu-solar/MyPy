@@ -9,6 +9,7 @@ from astropy.time import Time
 import astropy.units as u
 from scipy.interpolate import LinearNDInterpolator
 from copy import deepcopy
+import warnings 
 
 
 def iris_spec_xymesh_from_header(win_header, aux_header, aux_data):
@@ -37,7 +38,8 @@ def iris_spec_xymesh_from_header(win_header, aux_header, aux_data):
     return xmesh_rot + xcen[np.newaxis,:], ymesh_rot + ycen[np.newaxis,:]
 
 
-def iris_spec_map_interp_from_header(filename,data,mask=None,win_ext=1,aux_ext=-2,synchronize="mid",sdo_rsun=True):
+def iris_spec_map_interp_from_header(filename,data,mask=None,win_ext=1,aux_ext=-2,
+                                    synchronize="mid",sdo_rsun=True,xbin=1,ybin=1):
     data = deepcopy(data)	
 
     with fits.open(filename) as hdul:
@@ -50,14 +52,37 @@ def iris_spec_map_interp_from_header(filename,data,mask=None,win_ext=1,aux_ext=-
 
         xmesh, ymesh = iris_spec_xymesh_from_header(win_header, aux_header, aux_data)
 
+
+
         nx = win_header["NAXIS3"]
         ny = win_header["NAXIS2"]
+
+        if xbin > 1:
+            xmesh = np.nanmean(xmesh.reshape(xmesh.shape[0], -1, xbin), axis=2)
+            ymesh = np.nanmean(ymesh.reshape(ymesh.shape[0], -1, xbin), axis=2)
+            nx = nx//xbin
+        if ybin > 1:
+            xmesh = np.nanmean(xmesh.reshape(-1, ybin, xmesh.shape[1]), axis=1)
+            ymesh = np.nanmean(ymesh.reshape(-1, ybin, ymesh.shape[1]), axis=1)
+            ny = ny//ybin
 
         if (ny, nx) != data.shape[:2]:
             raise ValueError("Data shape does not match the shape of the mesh")
 
         deltax = win_header["CDELT3"]
+        if deltax < 0:
+            deltax = -deltax
+            xmesh = np.flip(xmesh, axis=1)
+            ymesh = np.flip(ymesh, axis=1)
+            warnings.warn("Negative CDELT3 found (raster from west to east). Changing sign to positive. "
+                    "Because we assume `iris_auto_fit` has flipped the data, we will not flip it back.",
+                    UserWarning,stacklevel=2)
         deltay = win_header["CDELT2"]
+
+        if xbin > 1:
+            deltax *= xbin
+        if ybin > 1:
+            deltay *= ybin
 
         if detector_type == "FUV":
             exposure_time = aux_data[:,aux_header["EXPTIMEF"]]*u.s

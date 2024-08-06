@@ -1577,7 +1577,8 @@ class SpectrumFit2D:
             if return_data:
                 return data_to_plot
 
-            plt.show()
+            if ax is None:
+                plt.show()
 
 
 
