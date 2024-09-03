@@ -542,6 +542,10 @@ def _check_for_nonfinite_entries(layer_image, template_image):
 
 
 if __name__ == "__main__":
+    '''
+    Example usage:
+    python map_coalign.py /path/to/map_sequence/*.fits /path/to/output_dir -ref 0 -i 3 -nh 
+    '''
     parser = argparse.ArgumentParser(description='Coalign a sequence of maps using a cross-correlation method')
     parser.add_argument('filename', type=str, help='input map sequence filename')
     parser.add_argument('output_dir', type=str, help='output directory')

@@ -1,3 +1,4 @@
+# still in development, not ready for use
 import sunpy
 import sunpy.map
 from sunpy.map import Map, MapSequence

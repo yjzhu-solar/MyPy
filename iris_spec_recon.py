@@ -39,7 +39,8 @@ def iris_spec_xymesh_from_header(win_header, aux_header, aux_data):
 
 
 def iris_spec_map_interp_from_header(filename,data,mask=None,win_ext=1,aux_ext=-2,
-                                    synchronize="mid",sdo_rsun=True,xbin=1,ybin=1):
+                                    synchronize="mid",sdo_rsun=True,xbin=1,ybin=1,
+                                    tr_mode="on"):
     data = deepcopy(data)	
 
     with fits.open(filename) as hdul:
@@ -116,7 +117,10 @@ def iris_spec_map_interp_from_header(filename,data,mask=None,win_ext=1,aux_ext=-
 
 
             for ii in range(nx):
-                helioprojective_frame_ii = Helioprojective(observer='earth', obstime=date_obs_each_exposure[ii],rsun=rsun)
+                if tr_mode == "on":
+                    helioprojective_frame_ii = Helioprojective(observer='earth', obstime=date_obs_each_exposure[0],rsun=rsun)
+                else:
+                    helioprojective_frame_ii = Helioprojective(observer='earth', obstime=date_obs_each_exposure[ii],rsun=rsun)
                 coords_ii = SkyCoord(xmesh[:,ii]*u.arcsec, ymesh[:,ii]*u.arcsec, frame=helioprojective_frame_ii)
                 with propagate_with_solar_surface(rotation_model='rigid'):
                     coords_ii_unified = coords_ii.transform_to(unify_helioprojective_frame)

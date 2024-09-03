@@ -62,8 +62,8 @@ def read_iris_sji(filename, index=None, sdo_rsun=False, mask=True, **kwargs):
             raise ValueError("index must be an integer, list, slice, date or Time object")
 
 def get_generic_map(ii, data, prim_header, aux_data, aux_header, sdo_rsun=False, mask=True, **kwargs):
-    date_obs_start = datetime.strptime(prim_header["DATE_OBS"],'%Y-%m-%dT%H:%M:%S.%f')
-    date_exposure_start = date_obs_start + timedelta(seconds=aux_data[ii, aux_header["TIME"]])
+    date_obs_start = Time(prim_header["DATE_OBS"])
+    date_exposure_start = date_obs_start + aux_data[ii, aux_header["TIME"]]*u.s
     exptime = aux_data[ii, aux_header["EXPTIMES"]]*u.s
 
     if sdo_rsun:

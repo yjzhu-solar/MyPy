@@ -27,6 +27,7 @@ from PyQt5.QtWidgets import QFileDialog
 import h5py
 import os
 import cv2
+from watroo import wow
 
 class SlitPick:
     """
@@ -53,8 +54,8 @@ class SlitPick:
             self.image_type = 'NDArray'
             self.ny, self.nx, self.nt = self.image_seq.shape
 
-        
-    def __call__(self, bottom_left=None, top_right=None, wcs_index=0, wcs_shift=None, norm=None, line_width=5):
+    def __call__(self, bottom_left=None, top_right=None, wcs_index=0, 
+                 wcs_shift=None, norm=None, line_width=5, img_wow=False):
 
         self.bottom_left = bottom_left
         self.top_right = top_right
@@ -75,6 +76,7 @@ class SlitPick:
         self.select_y = []
         self.line_width = line_width
         self.bg_remove_on = False
+        self.img_wow = img_wow
 
         if self.image_type == 'SunpyMap':
             if bottom_left is not None and top_right is not None:
@@ -89,6 +91,10 @@ class SlitPick:
             
             self.projection = self.map_wcs
 
+            if img_wow:
+                for ii, map in enumerate(self.image_seq_prep):
+                    self.image_seq_prep[ii] = sunpy.map.Map(wow(map.data)[0], map.meta)
+
         elif self.image_type == 'NDArray':
             if bottom_left is not None and top_right is not None:
                 self.image_seq_prep = self.image_seq[bottom_left[1]:top_right[1]+1, bottom_left[0]:top_right[0]+1]
@@ -99,6 +105,10 @@ class SlitPick:
                 warnings.warn('wcs_shift is not supported for NDArray input')
             
             self.projection = None
+
+            if img_wow:
+                for ii in range(self.nt):
+                    self.image_seq_prep[:,:,ii] = wow(self.image_seq_prep[:,:,ii])[0]
 
         self._init_gui()
 
@@ -141,7 +151,11 @@ class SlitPick:
             self.ax1.set_aspect('equal')
             self.ax2.set_aspect('equal')
 
-        self.ax2.imshow(self._get_simple_std(), cmap='magma', origin='lower')
+        self.simple_std = self._get_simple_std(every_nth=1)
+        self.ax2.imshow(self.simple_std, cmap='magma', origin='lower',
+                        norm = ImageNormalize(vmin=np.nanpercentile(self.simple_std, 2),
+                                              vmax=np.nanpercentile(self.simple_std, 98),
+                                              stretch=AsinhStretch(0.5),))
 
 
         self.ax1.set_title('Image')
@@ -846,8 +860,9 @@ class SlitPick:
 if  __name__ == "__main__":
     from glob import glob
     import astropy.units as u
-    eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221024/coalign_step/*.fits"))
-    # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221020/coalign_step/*.fits"))
+    # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221024/coalign_step/*.fits"))
+    # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221020/coalign_step_boxcar/*.fits"))
+    eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221026/coalign_step_boxcar/*.fits"))
     eui_map_seq_coalign = MapSequenceCoalign(sunpy.map.Map(eui_files[:])) 
 
     # eui_map_seq_coalign = np.ones((50,50,30))
@@ -856,9 +871,11 @@ if  __name__ == "__main__":
     #     eui_map_seq_coalign[ii:ii+2,ii:ii+2,ii] = np.ones((2,2))*10
 
     slit_pick = SlitPick(eui_map_seq_coalign)
-    slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=0)
+    # slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=0, img_wow=False) #1024 east 1
+    slit_pick(bottom_left=[1750,450]*u.pix, top_right=[2048,700]*u.pix,wcs_index=0,) #1026 west
     # slit_pick(bottom_left=[850,800]*u.pix, top_right=[1050,1000]*u.pix,wcs_index=0)
     # slit_pick(bottom_left=[700,550]*u.pix, top_right=[900,750]*u.pix,wcs_index=0)
+    # slit_pick(bottom_left=[300,750]*u.pix, top_right=[500,950]*u.pix,wcs_index=0) # 1020 east
 
     # slit_pick(bottom_left=[250,750]*u.pix, top_right=[420,920]*u.pix,wcs_index=0)
         
