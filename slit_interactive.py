@@ -28,6 +28,8 @@ import h5py
 import os
 import cv2
 from watroo import wow
+import multiprocessing
+from tqdm.contrib.concurrent import process_map
 
 class SlitPick:
     """
@@ -55,7 +57,8 @@ class SlitPick:
             self.ny, self.nx, self.nt = self.image_seq.shape
 
     def __call__(self, bottom_left=None, top_right=None, wcs_index=0, 
-                 wcs_shift=None, norm=None, line_width=5, img_wow=False):
+                 wcs_shift=None, norm=None, line_width=5, img_wow=False,
+                 init_gui=True):
 
         self.bottom_left = bottom_left
         self.top_right = top_right
@@ -110,7 +113,8 @@ class SlitPick:
                 for ii in range(self.nt):
                     self.image_seq_prep[:,:,ii] = wow(self.image_seq_prep[:,:,ii])[0]
 
-        self._init_gui()
+        if init_gui:
+            self._init_gui()
 
     
     def _init_gui(self):
@@ -296,7 +300,7 @@ class SlitPick:
         if self.image_type == 'SunpyMap':
             data_array = self.image_seq_prep[::every_nth].as_array()
         elif self.image_type == 'NDArray':
-            data_array = self.image_seq_prep[:,:,::every_nth]
+            data_array = self.image_seq_prep[:,:,:]
         return np.nanstd(data_array, axis=2)/np.nanmean(data_array, axis=2)
     
     def _update_time_index(self,which):
@@ -321,7 +325,7 @@ class SlitPick:
             elif which == 'time':
                 self.frame_index = int(self.text_box_time.text)
                 self.text_box_frame_index.set_val(str(self.frame_index))
-            self.ax1.get_images()[0].set_data(self.image_seq_prep[self.frame_index])
+            self.ax1.get_images()[0].set_data(self.image_seq_prep[:,:,self.frame_index])
 
         if self.successful:
             try:
@@ -725,6 +729,7 @@ class SlitPick:
             xdata_world, ydata_world = self.slit_cube.wcs.pixel_to_world(xdata,ydata)
             fit_param_world = np.polyfit((xdata_world - xdata_world[0]).to_value(u.s),
                                          ydata_world.to_value(u.km),self.fit_poly_order,w=fit_weights)
+            print(f"Fit parameters, polynomial coefficients in decending orders: {fit_param_world}")
             self.fit_params_world.append(fit_param_world)
             fit_curve_world = np.polyval(fit_param_world,(xdata_world - xdata_world[0]).to_value(u.s))
             self.fit_curves_world.append(fit_curve_world)
@@ -855,15 +860,163 @@ class SlitPick:
                              bbox_inches=bbox_to_save)
             print(f'Data saved successfully in {self.save_dir}')
 
+    def generate_all_slit_preview(self, x_num=9, y_num=9, angle_num=4, length=15,
+                                  line_width=5, save_path=None):
+        
+        self.simple_std = self._get_simple_std(every_nth=1)
+        
+        if self.image_type == 'SunpyMap':
+            data_shape = self.image_seq_prep[0].data.shape
+            xcen_array = np.linspace(0,data_shape[1],x_num+2)[0:-1]
+            ycen_array = np.linspace(0,data_shape[0],y_num+2)[0:-1]
+
+            args_array = []
+
+            for xcen in xcen_array:
+                for ycen in ycen_array:
+                    args_array.append((xcen, ycen, angle_num, length, line_width, save_path))
+            
+            # test one 
+            # self._generate_single_slit_work(*args_array[36])
+
+            # with multiprocessing.Pool(processes=2) as pool:
+            #     pool.starmap(self._generate_single_slit_work, args_array)
+
+            process_map(self._generate_single_slit_work, args_array, max_workers=1)
+
+
+    def _generate_single_slit_work(self, xcen, ycen, angle_num, length, line_width,
+                                   save_path):
+        for angle in np.linspace(0, np.pi, angle_num+1)[:-1]:
+            x_select = np.array([xcen - length/2*np.sin(angle), xcen + length/2*np.sin(angle)])
+            y_select = np.array([ycen - length/2*np.cos(angle), ycen + length/2*np.cos(angle)])
+
+            pixels_idy, pixels_idx = measure.profile._line_profile_coordinates((y_select[0], x_select[0]),
+                                        (y_select[1], x_select[1]), linewidth=line_width)
+            
+            pixels_idy_center = np.nanmean(pixels_idy,axis=1)
+            pixels_idx_center = np.nanmean(pixels_idx,axis=1)
+
+            if self.image_type == 'SunpyMap':
+                world_coord_center = self.map_wcs.pixel_to_world(pixels_idx_center,pixels_idy_center)
+                world_coord_all = self.map_wcs.pixel_to_world(pixels_idx,pixels_idy) 
+
+                world_coord_center_distance = []
+
+                for ii, pixels_center_ in enumerate(world_coord_center):
+                    if ii == 0:
+                        world_coord_center_distance.append(0*u.arcsec)
+                    else:
+                        world_coord_center_distance.append(world_coord_center[ii].separation(world_coord_center[ii-1]).to(u.arcsec) + \
+                                                        world_coord_center_distance[ii-1])
+                world_coord_center_distance = u.Quantity(world_coord_center_distance).to_value(u.rad)*self.image_seq_prep[self.wcs_index].dsun
+                world_coord_center_distance_interp = np.linspace(world_coord_center_distance[0],world_coord_center_distance[-1],
+                                                                    len(world_coord_center_distance))
+                
+            elif self.image_type == 'NDArray':
+                world_coord_center = None
+                world_coord_all = None
+                world_coord_center_distance = None
+            
+            pixel_distance = np.cumsum(np.sqrt(np.diff(pixels_idx_center)**2 + np.diff(pixels_idy_center)**2))
+            pixel_distance = np.insert(pixel_distance,0,0)
+            pixel_distance_interp = np.linspace(pixel_distance[0],pixel_distance[-1],len(pixel_distance))
+
+            intensity = []
+            for tt in range(self.nt):
+                if self.image_type == 'SunpyMap':
+                    line = measure.profile_line(self.image_seq_prep[tt].data, (y_select[0], x_select[0]),
+                                                (y_select[1], x_select[1]), linewidth=line_width,
+                                                reduce_func=np.nanmean)
+                elif self.image_type == 'NDArray':
+                    line = skimage.measure.profile_line(self.image_seq_prep[:,:,tt], (y_select[0], x_select[0]),
+                                                (y_select[1], x_select[1]), linewidth=line_width,
+                                                reduce_func=np.nanmean)
+                    
+                intensity_ = line
+            
+                if self.image_type == 'SunpyMap':
+                    intensity_interp = np.interp(world_coord_center_distance_interp,world_coord_center_distance,intensity_)
+                elif self.image_type == 'NDArray':
+                    intensity_interp = np.interp(pixel_distance_interp,pixel_distance,intensity_)
+
+
+                intensity.append(intensity_interp)
+            
+            slit_intensity = u.Quantity(intensity).T
+            slit_intensity = slit_intensity - cv2.GaussianBlur(slit_intensity,(1,15),0,5)
+
+
+            if self.image_type == 'SunpyMap':
+                spacetime_wcs = (TimeTableCoordinate(Time([map_.date for map_ in self.image_seq_prep]),
+                                                physical_types="time",names="time") & 
+                                QuantityTableCoordinate(world_coord_center_distance_interp.to(u.Mm),
+                                                physical_types="length",names="distance")).wcs
+                slit_cube = NDCube(slit_intensity,spacetime_wcs)
+
+                fig = plt.figure(figsize=(7,6), layout='constrained')
+                gs = fig.add_gridspec(2,2)
+
+                ax1 = fig.add_subplot(gs[0,0], projection=self.map_wcs)
+                ax2 = fig.add_subplot(gs[0,1], projection=self.map_wcs)
+                ax3 = fig.add_subplot(gs[1,:], projection=slit_cube.wcs)
+                
+                ax1.imshow(self.image_seq_prep[self.wcs_index].data, cmap='magma',
+                           norm=self.norm, origin='lower')
+                
+                ax2.imshow(self.simple_std, cmap='magma', origin='lower',
+                           norm=ImageNormalize(vmin=np.nanpercentile(self.simple_std,1),
+                                               vmax=np.nanpercentile(self.simple_std,99),
+                                               stretch=AsinhStretch(0.5)))
+                
+                boundary_x = np.concatenate((pixels_idx[:,0],pixels_idx[-1,1:],
+                                            pixels_idx[-1::-1,-1],pixels_idx[0,-1::-1]))
+                
+                boundary_y = np.concatenate((pixels_idy[:,0],pixels_idy[-1,1:],
+                                            pixels_idy[-1::-1,-1],pixels_idy[0,-1::-1]))
+                
+                boundary_x_line2d_ax1 = mlines.Line2D(boundary_x, boundary_y, color='#58B2DC', lw=1, alpha=0.8)
+                boundary_x_line2d_ax2 = mlines.Line2D(boundary_x, boundary_y, color='#58B2DC', lw=1, alpha=0.8)
+
+                ax1.add_line(boundary_x_line2d_ax1)
+                ax2.add_line(boundary_x_line2d_ax2)
+
+                ax3.imshow(slit_intensity, aspect='auto', cmap='magma', norm=ImageNormalize(interval=ZScaleInterval(),
+                                                                                           stretch=AsinhStretch(0.5)),
+                           origin='lower')
+                
+                fig.savefig(os.path.join(save_path,f'slit_{int(xcen)}_{int(ycen)}_{int(angle*180/np.pi)}.png'), dpi=300)
+                plt.close(fig)
+
+
+
+            
+
+
+
+
+
             
 
 if  __name__ == "__main__":
     from glob import glob
     import astropy.units as u
-    # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221024/coalign_step/*.fits"))
+    # from skimage.filters import unsharp_mask
+    eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221024/coalign_step/*.fits"))
     # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221020/coalign_step_boxcar/*.fits"))
-    eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221026/coalign_step_boxcar/*.fits"))
+    # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221026/coalign_step_boxcar/*.fits"))
+
+    # eui_files = sorted(glob("/home/yjzhu/Downloads/JSOC_20240919_003607/*.fits"))
     eui_map_seq_coalign = MapSequenceCoalign(sunpy.map.Map(eui_files[:])) 
+
+    # eui_map_seq_coalign_unsharp = []
+
+
+    # for map in eui_map_seq_coalign.maps:
+    #     eui_map_seq_coalign_unsharp.append(sunpy.map.Map(unsharp_mask(map.data, radius=10, amount=1),
+    #                                                      map.meta))
+    
+    # eui_map_seq_coalign_unsharp = MapSequenceCoalign(sunpy.map.Map(eui_map_seq_coalign_unsharp))
 
     # eui_map_seq_coalign = np.ones((50,50,30))
 
@@ -871,14 +1024,31 @@ if  __name__ == "__main__":
     #     eui_map_seq_coalign[ii:ii+2,ii:ii+2,ii] = np.ones((2,2))*10
 
     slit_pick = SlitPick(eui_map_seq_coalign)
+    # slit_pick(wcs_index=0, img_wow=True) #1024 east 1
     # slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=0, img_wow=False) #1024 east 1
-    slit_pick(bottom_left=[1750,450]*u.pix, top_right=[2048,700]*u.pix,wcs_index=0,) #1026 west
+    slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=181, img_wow=False, init_gui=False) #1024 east 1 all test
+    slit_pick.generate_all_slit_preview(x_num=9, y_num=9, angle_num=4, length=25, line_width=5, save_path='/home/yjzhu/Solar/EIS_DKIST_SolO/sav/dynamic_fibrils/east_1_generate_all_test/')
+    # slit_pick(bottom_left=[1600,300]*u.pix, top_right=[2048,700]*u.pix,wcs_index=0,) #1026 west
     # slit_pick(bottom_left=[850,800]*u.pix, top_right=[1050,1000]*u.pix,wcs_index=0)
     # slit_pick(bottom_left=[700,550]*u.pix, top_right=[900,750]*u.pix,wcs_index=0)
     # slit_pick(bottom_left=[300,750]*u.pix, top_right=[500,950]*u.pix,wcs_index=0) # 1020 east
-
+    # slit_pick(bottom_left=[300,750]*u.pix, top_right=[500,950]*u.pix,wcs_index=0) # 1020 west
     # slit_pick(bottom_left=[250,750]*u.pix, top_right=[420,920]*u.pix,wcs_index=0)
         
+    # files = sorted(glob('/home/yjzhu/Solar/EIS_DKIST_SolO/sav/DKIST_of/BJOLO/33_npy/*.npy'))
+    # files = sorted(glob('/home/yjzhu/Solar/EIS_DKIST_SolO/src/IRIS/20221024/1904/sji_1400_wow_to_vbi/*vbi*.npy'))
+    # files = sorted(glob('/home/yjzhu/Solar/EIS_DKIST_SolO/src/AIA/20221024/171/ARcutout_lvl15/to_vbi/*vbi*.npy'))
+    # data_cube = np.zeros((120,120,len(files)))
+    # data_cube = np.zeros((200,200,len(files)))
+
+    # for ii in range(len(files)):
+        # print(np.load(files[ii]).shape)
+        # data_cube[:,:,ii] = (np.load(files[ii]))[380:500,400:520]
+        # data_cube[:,:,ii] = (np.load(files[ii]))[300+32:500+32,200+32:400+32]
+
+    # data_cube = data_cube/np.nanmean(data_cube, axis=-1)[:,:,np.newaxis]
+    # slit_pick = SlitPick(data_cube)
+    # slit_pick()
 
 
 

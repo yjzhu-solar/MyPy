@@ -40,7 +40,7 @@ def iris_spec_xymesh_from_header(win_header, aux_header, aux_data):
 
 def iris_spec_map_interp_from_header(filename,data,mask=None,win_ext=1,aux_ext=-2,
                                     synchronize="mid",sdo_rsun=True,xbin=1,ybin=1,
-                                    tr_mode="on"):
+                                    tr_mode="on",scan_start="west"):
     data = deepcopy(data)	
 
     with fits.open(filename) as hdul:
@@ -96,6 +96,10 @@ def iris_spec_map_interp_from_header(filename,data,mask=None,win_ext=1,aux_ext=-
         date_obs_end = Time(prim_header["DATE_END"])
         date_average = date_obs_start + (date_obs_end - date_obs_start)/2
         date_obs_each_exposure = date_obs_start + aux_data[:,aux_header["TIME"]]*u.s + exposure_time/2
+
+        if scan_start == "west":
+            date_obs_each_exposure = np.flip(date_obs_each_exposure)
+
 
         if sdo_rsun:
             rsun = 696000000.0*u.m
@@ -177,14 +181,35 @@ def xy_to_wcs(x,y,data,date_obs,detector,rsun=None):
 
 
 
-# if __name__ == "__main__":
-#     filename = "~/Solar/EIS_DKIST_SolO/src/IRIS/20221024/2322/iris_l2_20221024_232249_3600609177_raster_t000_r00000.fits"
+if __name__ == "__main__":
+    from scipy.io import readsav
+    from sun_blinker import SunBlinker
+    from sjireader import read_iris_sji
+    from astropy.visualization import ImageNormalize, AsinhStretch
+    import matplotlib.pyplot as plt
 
-#     map = iris_spec_map_interp_from_header(filename, np.zeros((548,320)), win_ext=1, aux_ext=-2)
+    filename = "/home/yjzhu/Solar/EIS_DKIST_SolO/src/IRIS/20221024/2322/iris_l2_20221024_232249_3600609177_raster_t000_r00000.fits"
+    SiIV_1393_fitres_file = readsav("/home/yjzhu/Solar/EIS_DKIST_SolO/src/IRIS/20221024/2322/fit_res/SiIV_1393_raster0.sav",verbose=True)
+
+
+    # map = iris_spec_map_interp_from_header(filename, np.zeros((548,320)), win_ext=1, aux_ext=-2)
+    SiIV_1393_int_map = iris_spec_map_interp_from_header("/home/yjzhu/Solar/EIS_DKIST_SolO/src/IRIS/20221024/2322/iris_l2_20221024_232249_3600609177_raster_t000_r00000.fits",
+                    win_ext=3,data=SiIV_1393_fitres_file["int"].copy(), tr_mode="on")
+    
+    iris_1400_sji_2322_map = read_iris_sji("/home/yjzhu/Solar/EIS_DKIST_SolO/src/IRIS/20221024/2322/iris_l2_20221024_232249_3600609177_SJI_1400_t000.fits",
+                                        index=SiIV_1393_int_map.date,sdo_rsun=True)
+    
+    SiIV_1393_int_map.plot_settings["norm"] = ImageNormalize(vmin=0,vmax=1e4,stretch=AsinhStretch(0.1))
+    iris_1400_sji_2322_map.plot_settings["norm"] = ImageNormalize(vmin=10,vmax=200,stretch=AsinhStretch(0.05))
+    
+    with propagate_with_solar_surface():
+        SunBlinker(SiIV_1393_int_map, iris_1400_sji_2322_map, reproject=True, fps=0.5)
+    
+
 
 #     map.plot()
 
-#     plt.show()
+    plt.show()
     
     
         
