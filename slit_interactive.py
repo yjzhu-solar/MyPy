@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib 
-matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 from matplotlib.widgets import (TextBox, Button, 
                                 CheckButtons, RangeSlider,
@@ -17,6 +16,7 @@ from astropy.time import Time
 from astropy.visualization import (ImageNormalize, AsinhStretch,
                                     LinearStretch, PercentileInterval,
                                     ZScaleInterval)
+import astropy.units as u
 from astropy.io.misc.hdf5 import write_table_hdf5
 from skimage import draw, measure
 import skimage.measure.profile
@@ -30,6 +30,7 @@ import cv2
 from watroo import wow
 import multiprocessing
 from tqdm.contrib.concurrent import process_map
+
 
 class SlitPick:
     """
@@ -59,6 +60,9 @@ class SlitPick:
     def __call__(self, bottom_left=None, top_right=None, wcs_index=0, 
                  wcs_shift=None, norm=None, line_width=5, img_wow=False,
                  init_gui=True):
+
+        if init_gui:
+            matplotlib.use('Qt5Agg')
 
         self.bottom_left = bottom_left
         self.top_right = top_right
@@ -867,22 +871,28 @@ class SlitPick:
         
         if self.image_type == 'SunpyMap':
             data_shape = self.image_seq_prep[0].data.shape
-            xcen_array = np.linspace(0,data_shape[1],x_num+2)[0:-1]
-            ycen_array = np.linspace(0,data_shape[0],y_num+2)[0:-1]
+        elif self.image_type == 'NDArray':
+            data_shape = self.image_seq_prep.shape
 
-            args_array = []
+        xcen_array = np.linspace(0,data_shape[1],x_num+2)[0:-1]
+        ycen_array = np.linspace(0,data_shape[0],y_num+2)[0:-1]
 
-            for xcen in xcen_array:
-                for ycen in ycen_array:
-                    args_array.append((xcen, ycen, angle_num, length, line_width, save_path))
-            
-            # test one 
-            # self._generate_single_slit_work(*args_array[36])
+        args_array = []
 
-            # with multiprocessing.Pool(processes=2) as pool:
-            #     pool.starmap(self._generate_single_slit_work, args_array)
+        for xcen in xcen_array:
+            for ycen in ycen_array:
+                args_array.append((xcen, ycen, angle_num, length, line_width, save_path))
+        
+        # test one 
+        self._generate_single_slit_work(*args_array[36])
 
-            process_map(self._generate_single_slit_work, args_array, max_workers=1)
+        # with multiprocessing.Pool(processes=2) as pool:
+        #     pool.starmap(self._generate_single_slit_work, args_array)
+
+        # process_map(self._generate_single_slit_work, args_array, max_workers=1)
+
+
+
 
 
     def _generate_single_slit_work(self, xcen, ycen, angle_num, length, line_width,
@@ -988,26 +998,53 @@ class SlitPick:
                 fig.savefig(os.path.join(save_path,f'slit_{int(xcen)}_{int(ycen)}_{int(angle*180/np.pi)}.png'), dpi=300)
                 plt.close(fig)
 
+            if self.image_type == 'NDArray':
+                fig = plt.figure(figsize=(7,6), layout='constrained')
+                gs = fig.add_gridspec(2,2)
 
+                ax1 = fig.add_subplot(gs[0,0])
+                ax2 = fig.add_subplot(gs[0,1])
+                ax3 = fig.add_subplot(gs[1,:])
+                
+                ax1.imshow(self.image_seq_prep[:,:,self.wcs_index], cmap='magma',
+                           norm=self.norm, origin='lower')
+                
+                ax2.imshow(self.simple_std, cmap='magma', origin='lower',
+                           norm=ImageNormalize(vmin=np.nanpercentile(self.simple_std,1),
+                                               vmax=np.nanpercentile(self.simple_std,99),
+                                               stretch=AsinhStretch(0.5)))
+                
+                boundary_x = np.concatenate((pixels_idx[:,0],pixels_idx[-1,1:],
+                                            pixels_idx[-1::-1,-1],pixels_idx[0,-1::-1]))
+                
+                boundary_y = np.concatenate((pixels_idy[:,0],pixels_idy[-1,1:],
+                                            pixels_idy[-1::-1,-1],pixels_idy[0,-1::-1]))
+                
+                boundary_x_line2d_ax1 = mlines.Line2D(boundary_x, boundary_y, color='#58B2DC', lw=1, alpha=0.8)
+                boundary_x_line2d_ax2 = mlines.Line2D(boundary_x, boundary_y, color='#58B2DC', lw=1, alpha=0.8)
 
-            
+                ax1.add_line(boundary_x_line2d_ax1)
+                ax2.add_line(boundary_x_line2d_ax2)
 
-
-
-
+                ax3.imshow(slit_intensity, aspect='auto', cmap='magma', norm=ImageNormalize(interval=ZScaleInterval(),
+                                                                                           stretch=AsinhStretch(0.5)),
+                           origin='lower')
+                
+                fig.savefig(os.path.join(save_path,f'slit_{int(xcen)}_{int(ycen)}_{int(angle*180/np.pi)}.png'), dpi=300)
+                plt.close(fig)
 
             
 
 if  __name__ == "__main__":
     from glob import glob
-    import astropy.units as u
-    # from skimage.filters import unsharp_mask
-    eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221024/coalign_step/*.fits"))
+
+    # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221024/coalign_step/*.fits"))
     # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221020/coalign_step_boxcar/*.fits"))
     # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221026/coalign_step_boxcar/*.fits"))
-
     # eui_files = sorted(glob("/home/yjzhu/Downloads/JSOC_20240919_003607/*.fits"))
-    eui_map_seq_coalign = MapSequenceCoalign(sunpy.map.Map(eui_files[:])) 
+
+
+    # eui_map_seq_coalign = MapSequenceCoalign(sunpy.map.Map(eui_files[:])) 
 
     # eui_map_seq_coalign_unsharp = []
 
@@ -1023,11 +1060,26 @@ if  __name__ == "__main__":
     # for ii in range(30):
     #     eui_map_seq_coalign[ii:ii+2,ii:ii+2,ii] = np.ones((2,2))*10
 
-    slit_pick = SlitPick(eui_map_seq_coalign)
+    dkist_cube = np.ones((200,200,210))
+    dkist_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/sav/DKIST_of/BJOLO/33_npy/*.npy"))
+
+    for ii in range(210):
+        # dkist_cube[:,:,ii] = np.load(dkist_files[ii])[300+32:500+32,200+32:400+32]
+        dkist_cube[:,:,ii] = np.load(dkist_files[ii])[300+32:500+32,400+32:600+32]
+
+    #slit_pick = SlitPick(eui_map_seq_coalign)
+    slit_pick = SlitPick(dkist_cube)
+
     # slit_pick(wcs_index=0, img_wow=True) #1024 east 1
     # slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=0, img_wow=False) #1024 east 1
-    slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=181, img_wow=False, init_gui=False) #1024 east 1 all test
-    slit_pick.generate_all_slit_preview(x_num=9, y_num=9, angle_num=4, length=25, line_width=5, save_path='/home/yjzhu/Solar/EIS_DKIST_SolO/sav/dynamic_fibrils/east_1_generate_all_test/')
+    # slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=181, img_wow=False, init_gui=False) #1024 east 1 all test
+    # slit_pick.generate_all_slit_preview(x_num=9, y_num=9, angle_num=4, length=25, line_width=5, save_path='/home/yjzhu/Solar/EIS_DKIST_SolO/sav/dynamic_fibrils/east_1_generate_all_test/')
+    
+    slit_pick(wcs_index=0, img_wow=False, init_gui=False) #1024 east 1
+
+
+
+    slit_pick.generate_all_slit_preview(x_num=9, y_num=9, angle_num=4, length=50, line_width=5, save_path='/home/yjzhu/Downloads/')
     # slit_pick(bottom_left=[1600,300]*u.pix, top_right=[2048,700]*u.pix,wcs_index=0,) #1026 west
     # slit_pick(bottom_left=[850,800]*u.pix, top_right=[1050,1000]*u.pix,wcs_index=0)
     # slit_pick(bottom_left=[700,550]*u.pix, top_right=[900,750]*u.pix,wcs_index=0)
