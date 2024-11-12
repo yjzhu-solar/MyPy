@@ -28,8 +28,7 @@ import h5py
 import os
 import cv2
 from watroo import wow
-import multiprocessing
-from tqdm.contrib.concurrent import process_map
+from concurrent.futures import ProcessPoolExecutor
 
 
 class SlitPick:
@@ -865,7 +864,7 @@ class SlitPick:
             print(f'Data saved successfully in {self.save_dir}')
 
     def generate_all_slit_preview(self, x_num=9, y_num=9, angle_num=4, length=15,
-                                  line_width=5, save_path=None):
+                                  line_width=5, ncpu=None, save_path=None):
         
         self.simple_std = self._get_simple_std(every_nth=1)
         
@@ -883,13 +882,14 @@ class SlitPick:
             for ycen in ycen_array:
                 args_array.append((xcen, ycen, angle_num, length, line_width, save_path))
         
-        # test one 
-        self._generate_single_slit_work(*args_array[36])
+        # # test one 
+        # self._generate_single_slit_work(*args_array[36])
 
-        # with multiprocessing.Pool(processes=2) as pool:
-        #     pool.starmap(self._generate_single_slit_work, args_array)
+        if ncpu is None:
+            ncpu = os.cpu_count()
 
-        # process_map(self._generate_single_slit_work, args_array, max_workers=1)
+        with ProcessPoolExecutor(max_workers=ncpu) as executor:
+            executor.map(self._generate_single_slit_work, args_array)
 
 
 
