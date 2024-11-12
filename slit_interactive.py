@@ -28,7 +28,7 @@ import h5py
 import os
 import cv2
 from watroo import wow
-from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
 
 
 class SlitPick:
@@ -888,12 +888,12 @@ class SlitPick:
         if ncpu is None:
             ncpu = os.cpu_count()
 
-        with ProcessPoolExecutor(max_workers=ncpu) as executor:
-            executor.map(self._generate_single_slit_work, args_array)
 
+        with multiprocessing.Pool(ncpu) as pool:
+            pool.starmap(self._generate_single_slit_work, args_array)
 
-
-
+        # with ProcessPoolExecutor(max_workers=ncpu) as executor:
+        #     executor.map(self._generate_single_slit_work, args_array)
 
     def _generate_single_slit_work(self, xcen, ycen, angle_num, length, line_width,
                                    save_path):
@@ -1032,6 +1032,7 @@ class SlitPick:
                 
                 fig.savefig(os.path.join(save_path,f'slit_{int(xcen)}_{int(ycen)}_{int(angle*180/np.pi)}.png'), dpi=300)
                 plt.close(fig)
+  
 
             
 
@@ -1077,9 +1078,7 @@ if  __name__ == "__main__":
     
     slit_pick(wcs_index=0, img_wow=False, init_gui=False) #1024 east 1
 
-
-
-    slit_pick.generate_all_slit_preview(x_num=9, y_num=9, angle_num=4, length=50, line_width=5, save_path='/home/yjzhu/Downloads/')
+    slit_pick.generate_all_slit_preview(x_num=2, y_num=2, angle_num=4, length=50, line_width=5, save_path='/home/yjzhu/Downloads/', ncpu=1)
     # slit_pick(bottom_left=[1600,300]*u.pix, top_right=[2048,700]*u.pix,wcs_index=0,) #1026 west
     # slit_pick(bottom_left=[850,800]*u.pix, top_right=[1050,1000]*u.pix,wcs_index=0)
     # slit_pick(bottom_left=[700,550]*u.pix, top_right=[900,750]*u.pix,wcs_index=0)
