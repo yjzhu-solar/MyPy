@@ -53,7 +53,7 @@ class SunBlinker():
 
     
     def _init_plot(self):
-        self.fig = plt.figure(figsize=self.figsize,constrained_layout=True)
+        self.fig = plt.figure(figsize=self.figsize)
         self.ax = self.fig.add_subplot(111, projection=self.map1)
         if 'aspect' in self.map1.plot_settings.keys():
             self.ax.set_aspect(self.map1.plot_settings['aspect'])
@@ -119,7 +119,7 @@ class ImageBlinker():
 
 
     def _init_plot(self):
-        self.fig = plt.figure(figsize=self.figsize,constrained_layout=True)
+        self.fig = plt.figure(figsize=self.figsize)
         self.ax = self.fig.add_subplot(111)
         self.im = self.ax.imshow(self.image1, norm=self.norm1, origin='lower',
                                  aspect=self.aspect, **self.kwargs)
