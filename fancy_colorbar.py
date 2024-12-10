@@ -42,7 +42,8 @@ def plot_colorbar(im, ax, bbox_to_anchor=(1.02, 0., 1, 0.1),fontsize=10,
 # a more advanced version of astropy.visualization.wcsaxes.add_scalebar()
 # which allows for more customization including bbox_props
 # also allows for the scalebar accept a length-like quantity
-# and automatically converts it to degrees assuming the 
+# and automatically converts it to degrees using the dsun attribute
+# of the WCS using a Cartesian approximation
 
 def wcs_scalebar(ax,
     length,
@@ -52,7 +53,8 @@ def wcs_scalebar(ax,
     borderpad=0.4,
     pad=0.5,
     bbox_props=None,
-    dsun=1*u.au,
+    dsun=None,
+    correct_rectangle_pixels=True,
     **kwargs,
     ):
     """Add a scale bar.
@@ -76,6 +78,18 @@ def wcs_scalebar(ax,
         Border padding, in fraction of the font size. Default is 0.4.
     pad : float, optional
         Padding around the scale bar, in fraction of the font size. Default is 0.5.
+    bbox_props : dict, optional
+        A dictionary of properties to be passed to the :class:`~matplotlib.patches.FancyBboxPatch`
+        that is used to draw the scale bar. Default is ``None``.
+    dsun : :class:`~astropy.units.Quantity`, optional
+        The distance to the Sun. Only used when the length is a length-like quantity. 
+        If not provided, dsun is get from the WCSAxes.wcs.wcs.aux.dsun_obs attribute.
+        Default is ``None``.
+    correct_rectangle_pixels : bool, optional
+        Whether to correct for rectangular pixels (cdelt1 != cdelt2).
+        Assume the aspect ratio of the pixels is correct, i.e.,
+        aspect = cdelt2 / cdelt1.
+        Default is ``True``.
     kwargs
         Additional arguments are passed to
         :class:`mpl_toolkits.axes_grid1.anchored_artists.AnchoredSizeBar`.
@@ -102,6 +116,9 @@ def wcs_scalebar(ax,
     "bottom": 8,
     "top": 9,
     }
+
+    if dsun is None:
+        dsun = ax.wcs.wcs.aux.dsun_obs * u.m
     
     if isinstance(length, u.Quantity):
         if length.unit.physical_type == "angle":
@@ -116,7 +133,10 @@ def wcs_scalebar(ax,
         pix_scale = proj_plane_pixel_scales(ax.wcs)
         sx = pix_scale[0]
         sy = pix_scale[1]
-        degrees_per_pixel = np.sqrt(sx * sy)
+        if correct_rectangle_pixels:
+            degrees_per_pixel = sx
+        else:
+            degrees_per_pixel = np.sqrt(sx * sy)
     else:
         raise ValueError("Cannot show scalebar when WCS is not celestial")
 
