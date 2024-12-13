@@ -12,6 +12,7 @@ from skimage.feature import match_template
 from scipy.ndimage import shift
 import astropy.units as u
 from astropy.visualization import (ImageNormalize, AsinhStretch)
+from astropy.io.fits import CompImageHDU
 from tqdm import tqdm
 from glob import glob
 from copy import deepcopy
@@ -569,7 +570,11 @@ if __name__ == "__main__":
 
     do_save = input('Do you want to save the coaligned map sequence? (y/n): ')
     if do_save == 'y':
-        ms.save(os.path.join(args.output_dir,"map_seq_coalign_{index:03}.fits"), overwrite=True)
+        do_compress = input('Do you want to save the coaligned map in compressed FITS? (y/n): ')
+        if do_compress == 'y':
+            ms.save(os.path.join(args.output_dir,"map_seq_coalign_{index:03}.fits"), overwrite=True, hdu_type=CompImageHDU)
+        else:
+            ms.save(os.path.join(args.output_dir,"map_seq_coalign_{index:03}.fits"), overwrite=True)
     else:
         pass
 
