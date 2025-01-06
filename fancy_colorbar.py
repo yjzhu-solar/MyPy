@@ -11,7 +11,7 @@ import numpy as np
 import astropy.units as u
 from astropy.wcs.utils import proj_plane_pixel_scales
 
-def plot_colorbar(im, ax, bbox_to_anchor=(1.02, 0., 1, 0.1),fontsize=10,
+def plot_colorbar(im, ax, bbox_to_anchor=(1.02, 0., 0.1, 1),fontsize=10,
                   orientation="vertical",
                   title=None,scilimits=(-4,4),**kwargs):
     # clb_ax = inset_axes(ax,width=width,height=height,loc=loc,
