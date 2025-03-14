@@ -1041,11 +1041,11 @@ if  __name__ == "__main__":
 
     # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221024/coalign_step/*.fits"))
     # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221020/coalign_step_boxcar/*.fits"))
-    # eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221026/coalign_step_boxcar/*.fits"))
+    eui_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/src/EUI/HRI/euv174/20221026/coalign_step_boxcar/*.fits"))
     # eui_files = sorted(glob("/home/yjzhu/Downloads/JSOC_20240919_003607/*.fits"))
 
 
-    # eui_map_seq_coalign = MapSequenceCoalign(sunpy.map.Map(eui_files[:])) 
+    eui_map_seq_coalign = MapSequenceCoalign(sunpy.map.Map(eui_files[:])) 
 
     # eui_map_seq_coalign_unsharp = []
 
@@ -1061,25 +1061,25 @@ if  __name__ == "__main__":
     # for ii in range(30):
     #     eui_map_seq_coalign[ii:ii+2,ii:ii+2,ii] = np.ones((2,2))*10
 
-    dkist_cube = np.ones((200,200,210))
-    dkist_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/sav/DKIST_of/BJOLO/33_npy/*.npy"))
+    # dkist_cube = np.ones((200,200,210))
+    # dkist_files = sorted(glob("/home/yjzhu/Solar/EIS_DKIST_SolO/sav/DKIST_of/BJOLO/33_npy/*.npy"))
 
-    for ii in range(210):
-        # dkist_cube[:,:,ii] = np.load(dkist_files[ii])[300+32:500+32,200+32:400+32]
-        dkist_cube[:,:,ii] = np.load(dkist_files[ii])[300+32:500+32,400+32:600+32]
+    # for ii in range(210):
+    #     # dkist_cube[:,:,ii] = np.load(dkist_files[ii])[300+32:500+32,200+32:400+32]
+    #     dkist_cube[:,:,ii] = np.load(dkist_files[ii])[300+32:500+32,400+32:600+32]
 
-    #slit_pick = SlitPick(eui_map_seq_coalign)
-    slit_pick = SlitPick(dkist_cube)
+    slit_pick = SlitPick(eui_map_seq_coalign)
+    # slit_pick = SlitPick(dkist_cube)
 
     # slit_pick(wcs_index=0, img_wow=True) #1024 east 1
     # slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=0, img_wow=False) #1024 east 1
     # slit_pick(bottom_left=[500,600]*u.pix, top_right=[670,760]*u.pix,wcs_index=181, img_wow=False, init_gui=False) #1024 east 1 all test
     # slit_pick.generate_all_slit_preview(x_num=9, y_num=9, angle_num=4, length=25, line_width=5, save_path='/home/yjzhu/Solar/EIS_DKIST_SolO/sav/dynamic_fibrils/east_1_generate_all_test/')
     
-    slit_pick(wcs_index=0, img_wow=False, init_gui=False) #1024 east 1
+    # slit_pick(wcs_index=0, img_wow=False, init_gui=False) #1024 east 1
 
-    slit_pick.generate_all_slit_preview(x_num=2, y_num=2, angle_num=4, length=50, line_width=5, save_path='/home/yjzhu/Downloads/', ncpu=1)
-    # slit_pick(bottom_left=[1600,300]*u.pix, top_right=[2048,700]*u.pix,wcs_index=0,) #1026 west
+    # slit_pick.generate_all_slit_preview(x_num=2, y_num=2, angle_num=4, length=50, line_width=5, save_path='/home/yjzhu/Downloads/', ncpu=1)
+    slit_pick(bottom_left=[1600,300]*u.pix, top_right=[2048,700]*u.pix,wcs_index=0,) #1026 west
     # slit_pick(bottom_left=[850,800]*u.pix, top_right=[1050,1000]*u.pix,wcs_index=0)
     # slit_pick(bottom_left=[700,550]*u.pix, top_right=[900,750]*u.pix,wcs_index=0)
     # slit_pick(bottom_left=[300,750]*u.pix, top_right=[500,950]*u.pix,wcs_index=0) # 1020 east

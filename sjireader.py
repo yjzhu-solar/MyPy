@@ -12,7 +12,7 @@ from astropy.coordinates import SkyCoord
 from astropy.time import Time
 from datetime import datetime, timedelta, date
 
-def read_iris_sji(filename, index=None, sdo_rsun=False, mask=True, **kwargs):
+def read_iris_sji(filename, index=None, sdo_rsun=False, mask=True, nbin=1, **kwargs):
     with fits.open(filename) as hdul:
         data = hdul[0].data.copy()
         prim_header = hdul[0].header.copy()
@@ -24,27 +24,27 @@ def read_iris_sji(filename, index=None, sdo_rsun=False, mask=True, **kwargs):
         if index is None:
             maps = []
             for ii in range(n_image): #
-                maps.append(get_generic_map(ii, data, prim_header, aux_data, aux_header, sdo_rsun=sdo_rsun,
-                                            mask=mask))
+                maps.append(get_generic_map(ii, data, prim_header, aux_data, aux_header, nbin=nbin,
+                                            sdo_rsun=sdo_rsun, mask=mask))
             
             return sunpy.map.Map(maps, **kwargs)
         
         elif isinstance(index, (int, np.integer)):
-            return get_generic_map(index, data, prim_header, aux_data, aux_header, sdo_rsun=sdo_rsun,
-                                    mask=mask, **kwargs)
+            return get_generic_map(index, data, prim_header, aux_data, aux_header, nbin=nbin,
+                                   sdo_rsun=sdo_rsun, mask=mask, **kwargs)
         
         elif isinstance(index, (list, np.ndarray)):
             maps = []
             for ii in index:
-                maps.append(get_generic_map(ii, data, prim_header, aux_data, aux_header, sdo_rsun=sdo_rsun,
-                                        mask=mask))
+                maps.append(get_generic_map(ii, data, prim_header, aux_data, aux_header,
+                                            nbin=nbin, sdo_rsun=sdo_rsun, mask=mask))
             return sunpy.map.Map(maps, **kwargs)
         
         elif isinstance(index, slice):
             maps = []
             for ii in range(n_image)[index]:
-                maps.append(get_generic_map(ii, data, prim_header, aux_data, aux_header, sdo_rsun=sdo_rsun,
-                                        mask=mask))
+                maps.append(get_generic_map(ii, data, prim_header, aux_data, aux_header,
+                                            nbin=nbin, sdo_rsun=sdo_rsun, mask=mask))
             return sunpy.map.Map(maps, **kwargs)
         
         elif isinstance(index, (date,Time)):
@@ -55,13 +55,13 @@ def read_iris_sji(filename, index=None, sdo_rsun=False, mask=True, **kwargs):
                             aux_data[:, aux_header["TIME"]]*timedelta(seconds=1)
             
             index = np.abs(date_obs_all - index).argmin()
-            return get_generic_map(index, data, prim_header, aux_data, aux_header, sdo_rsun=sdo_rsun,
-                                    mask=mask, **kwargs)
+            return get_generic_map(index, data, prim_header, aux_data, aux_header, 
+                                   nbin=nbin, sdo_rsun=sdo_rsun, mask=mask, **kwargs)
         
         else:
             raise ValueError("index must be an integer, list, slice, date or Time object")
 
-def get_generic_map(ii, data, prim_header, aux_data, aux_header, sdo_rsun=False, mask=True, **kwargs):
+def get_generic_map(ii, data, prim_header, aux_data, aux_header, nbin=1, sdo_rsun=False, mask=True, **kwargs):
     date_obs_start = Time(prim_header["DATE_OBS"])
     date_exposure_start = date_obs_start + aux_data[ii, aux_header["TIME"]]*u.s
     exptime = aux_data[ii, aux_header["EXPTIMES"]]*u.s
@@ -70,7 +70,21 @@ def get_generic_map(ii, data, prim_header, aux_data, aux_header, sdo_rsun=False,
         rsun = 696000000*u.m
     else:
         rsun = None
-    map_fitswcs_header = sunpy.map.make_fitswcs_header(data[ii,:,:],
+    
+    if nbin > 1:
+        ii_start = ii - nbin//2
+        ii_end = ii + nbin//2 + 1
+
+        if ii_start < 0:
+            ii_start = 0
+        if ii_end > data.shape[0]:
+            ii_end = data.shape[0]
+        map_data = np.nanmean(data[ii_start:ii_end,:,:], axis=0)
+    elif nbin == 1:
+        map_data = data[ii,:,:]
+    else:
+        raise ValueError("nbin must be an integer greater than or equal to 1")
+    map_fitswcs_header = sunpy.map.make_fitswcs_header(map_data,
                                                        SkyCoord(aux_data[ii, aux_header["XCENIX"]]*u.arcsec,
                                                                 aux_data[ii, aux_header["YCENIX"]]*u.arcsec,
                                                                 frame="helioprojective",observer="earth",
