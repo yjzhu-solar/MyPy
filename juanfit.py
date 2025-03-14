@@ -22,7 +22,6 @@ from matplotlib import ticker
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator, 
                                 AutoLocator, MaxNLocator)
 from IPython.display import display, Math
-from numpy.lib.function_base import delete
 import emcee
 import scipy
 from scipy.special import wofz, voigt_profile
