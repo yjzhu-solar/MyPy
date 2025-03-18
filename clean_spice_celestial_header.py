@@ -16,7 +16,9 @@ def remove_temporal_axis(hdr):
     hdr = deepcopy(hdr)
     hdr['NAXIS'] = 3
 
-    keys_to_remove = ['NAXIS4', 'PXBEG4', 'PXEND4', 'CRPIX4', 'CRVAL4', 'CDELT4', 'CTYPE4', 'CUNIT4', 'PC4_1', 'PC4_2', 'PC4_3', 'PC4_4']
+    keys_to_remove = ['NAXIS4', 'PXBEG4', 'PXEND4', 'CRPIX4', 'CRVAL4',
+                      'CDELT4', 'CTYPE4', 'CUNIT4', 'NBIN4', 'CNAME4',
+                      'PC4_1', 'PC4_2', 'PC4_3', 'PC4_4',]
     for key in keys_to_remove:
         hdr.pop(key, 0)
     
