@@ -35,10 +35,7 @@ def get_map_edge_coords(map, step=1):
         x_pix.append(map_edges[0][ii,0].value)
         y_pix.append(map_edges[0][ii,1].value)
 
-    if map_edges[2].shape[0] % step != 0:
-        iter_2 = chain(range(map_edges[2].shape[0]-1, -1, -step), [0])
-    else:
-        iter_2 = range(map_edges[2].shape[0]-1, -1, -step)
+    iter_2 = chain(range(map_edges[2].shape[0]-1, -1, -step), [0])
 
     for ii in iter_2:
         x_pix.append(map_edges[2][ii,0].value)
