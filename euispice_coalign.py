@@ -12,6 +12,7 @@ from sunpy.coordinates import (propagate_with_solar_surface,
 import sunpy.map
 from scipy.interpolate import RegularGridInterpolator
 from skimage.feature import match_template
+from skimage.registration import phase_cross_correlation
 import sunkit_image.coalignment as coalignment
 import scipy.ndimage as ndimage
 from glob import glob
@@ -33,8 +34,8 @@ def create_syn_rasters(spice_file, eui_files, spice_window,
 
     # copy the WCSDVARR
     with fits.open(spice_file) as hduls:
-        spice_solarx_shift = hduls[-2].data.copy()
-        spice_solary_shift = hduls[-1].data.copy()
+        spice_solarx_shift = hduls['WCSDVARR',1].data.copy()
+        spice_solary_shift = hduls['WCSDVARR',2].data.copy()
     
     if isinstance(spice_window, int):
         spice_window = spice_dataset[list(spice_dataset.keys())[0]]
@@ -52,6 +53,8 @@ def create_syn_rasters(spice_file, eui_files, spice_window,
         spice_wcs.wcs.cdelt[0] = spice_wcs.wcs.cdelt[0]*cdelt1_multiplier
         spice_wcs.wcs.pc[0,1] = spice_wcs.wcs.pc[0,1]/cdelt1_multiplier
         spice_wcs.wcs.pc[1,0] = spice_wcs.wcs.pc[1,0]*cdelt1_multiplier
+
+    spice_wcs = deepcopy(spice_wcs)
 
     spice_nx = spice_window.dimensions[-1].value.astype(int)
     spice_ny = spice_window.dimensions[-2].value.astype(int)
@@ -104,6 +107,7 @@ def make_single_syn_raster(spice_wcs, eui_syn_raster_image, spice_time_obs, sola
 
     spice_skycoord_rough = spice_wcs.pixel_to_world(spice_pixx, spice_pixy, spice_pixt)[0][:,:,0]
 
+
     for ii in range(eui_syn_raster_image.shape[1]):
         if solar_rotation:
             spice_skycoord = SkyCoord(spice_skycoord_rough[:,ii].Tx.to(u.arcsec) + spice_solarx_shift[ii]*u.arcsec, 
@@ -128,11 +132,14 @@ def make_single_syn_raster(spice_wcs, eui_syn_raster_image, spice_time_obs, sola
                                                             eui_maps[eui_map_index].data, bounds_error=False, 
                                                             method="linear")
             eui_syn_raster_image[:,ii] = eui_map_interpolator((spice_skycoord_pixel[1], spice_skycoord_pixel[0]))
+
         
     return eui_syn_raster_image
 
-def calculate_eui_spice_shift(spice_file, eui_files, spice_window, eui_syn_raster_images,
-                              rotation=True, cdelt1_multiplier=1):
+def calculate_eui_spice_shift(spice_file, spice_window, eui_syn_raster_images,
+                              rotation=True, cdelt1_multiplier=1, save_filename=None,
+                              output_dir=None):
+    
     spice_dataset = read_spice_l2_fits(spice_file)
     
     if isinstance(spice_window, int):
@@ -153,6 +160,9 @@ def calculate_eui_spice_shift(spice_file, eui_files, spice_window, eui_syn_raste
         spice_wcs.wcs.cdelt[0] = spice_wcs.wcs.cdelt[0]*cdelt1_multiplier
         spice_wcs.wcs.pc[0,1] = spice_wcs.wcs.pc[0,1]/cdelt1_multiplier
         spice_wcs.wcs.pc[1,0] = spice_wcs.wcs.pc[1,0]*cdelt1_multiplier
+    
+    spice_wcs = deepcopy(spice_wcs)
+    
 
     spice_nx = spice_window.dimensions[-1].value.astype(int)
     spice_ny = spice_window.dimensions[-2].value.astype(int)
@@ -179,9 +189,10 @@ def calculate_eui_spice_shift(spice_file, eui_files, spice_window, eui_syn_raste
     
     for ii, eui_syn_raster_image in enumerate(eui_syn_raster_images[:,:,:]):
         spice_int_img_cut = spice_int_img[spice_ny//4:3*spice_ny//4, spice_nx//4:3*spice_nx//4]
-
         xshift, yshift, max_cc = coalign_shift_pixel(eui_syn_raster_image, spice_int_img_cut)
 
+        # spice_int_img_cut = spice_int_img
+        # xshift, yshift, max_cc = coalign_shift_pixel_new(eui_syn_raster_image[140:-140,:], spice_int_img_cut[140:-140,:])
 
         yshifts.append(yshift)
         xshifts.append(xshift)
@@ -195,6 +206,7 @@ def calculate_eui_spice_shift(spice_file, eui_files, spice_window, eui_syn_raste
     spice_wcs_optimal.wcs.pc[:2,:2] = np.dot(spice_wcs.wcs.pc[:2,:2], rot_matrix_optimal)
     
     shift_reference_world_coord = spice_wcs_optimal.pixel_to_world(xshift_optimal, yshift_optimal, 0)[0]
+    # reference_pixel_world_coord = spice_wcs_optimal.pixel_to_world(0,0,0)[0]
     reference_pixel_world_coord = spice_wcs_optimal.pixel_to_world(spice_nx//4,spice_ny//4,0)[0]
 
     print(xshift_optimal, yshift_optimal, spice_nx//4, spice_ny//4)
@@ -205,6 +217,7 @@ def calculate_eui_spice_shift(spice_file, eui_files, spice_window, eui_syn_raste
     eui_syn_raster_map = sunpy.map.Map(eui_syn_raster_images[max_cc_index,:,:], spice_wcs_optimal)
     eui_syn_raster_map.plot_settings['aspect'] = eui_syn_raster_map.scale.axis2/eui_syn_raster_map.scale.axis1
     spice_int_map = sunpy.map.Map(spice_int_img, spice_wcs_optimal)
+    print(spice_wcs_optimal.wcs.cdelt)
     spice_int_map = spice_int_map.shift_reference_coord(xshift_optimal_world, yshift_optimal_world)
     new_crval1, new_crval2 = spice_int_map.reference_coordinate.Tx, spice_int_map.reference_coordinate.Ty
     new_rotation_matrix = spice_int_map.rotation_matrix
@@ -237,7 +250,8 @@ def calculate_eui_spice_shift(spice_file, eui_files, spice_window, eui_syn_raste
                                     stretch=AsinhStretch(0.1)),)
     plt.show()
 
-    save_new_spice_file(spice_file, new_crval1, new_crval2, new_rotation_matrix, cdelt1_multiplier=cdelt1_multiplier)
+    save_new_spice_file(spice_file, new_crval1, new_crval2, new_rotation_matrix, cdelt1_multiplier=cdelt1_multiplier,
+                        outdir=output_dir, filename=save_filename)
 
     return xshift_optimal_world, yshift_optimal_world, rot_matrix_optimal, np.rad2deg(rot_angle_optimal) 
 
@@ -248,8 +262,12 @@ def save_new_spice_file(spice_file, crval1, crval2, rotation_matrix, cdelt1_mult
                 hdul.header = update_header(hdul.header, crval1, crval2, rotation_matrix, cdelt1_multiplier)
         if outdir is None:
             outdir = Path(spice_file).parent
+        elif isinstance(outdir, str):
+            outdir = Path(outdir)
         if filename is None:
             filename = Path(spice_file).stem + '_coalign.fits'
+        elif isinstance(filename, str):
+            filename = Path(filename)
 
         hduls.writeto(outdir/filename, overwrite=True)
 
@@ -318,6 +336,11 @@ def _calculate_shift(this_layer, template):
 def coalign_shift_pixel(big_map, small_map):
     yshift, xshift, max_cc = _calculate_shift(big_map, small_map)
     return xshift.to_value(u.pix), yshift.to_value(u.pix), max_cc
+
+def coalign_shift_pixel_new(map1, map2):
+    (yshift, xshift), error, diffphase = phase_cross_correlation(map1, map2, upsample_factor=10)
+    return xshift, yshift, -np.sqrt(np.sum(error**2))
+
     
 
 if __name__ == '__main__':
@@ -355,11 +378,13 @@ if __name__ == '__main__':
     if args.synthetic_rater_filename is None:
         synthetic_rater_filename = os.path.join(os.path.dirname(eui_files[0]), 'eui_syn_raster_image_for_spice.npz')
         eui_syn_raster_images = create_syn_rasters(args.spice_file, eui_files, args.spice_window, synthetic_rater_filename,
-                                                 solar_rotation=args.solar_rotation, cdelt1_multiplier=args.cdelt1)
+                                                 solar_rotation=args.solar_rotation, cdelt1_multiplier=args.cdelt1,
+                                                 rotation=args.rotation)
     
     xshift_optimal, yshift_optimal, rot_matrix_optimal, rot_angle_optimal = \
-        calculate_eui_spice_shift(args.spice_file, eui_files, args.spice_window, eui_syn_raster_images, rotation=args.rotation,
-                                  cdelt1_multiplier=args.cdelt1)
+        calculate_eui_spice_shift(args.spice_file, args.spice_window, eui_syn_raster_images, rotation=args.rotation,
+                                  cdelt1_multiplier=args.cdelt1, save_filename=args.save_filename,
+                                  output_dir=args.output_dir)
     
     print(xshift_optimal, yshift_optimal, rot_matrix_optimal, rot_angle_optimal)
 
