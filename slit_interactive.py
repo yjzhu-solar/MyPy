@@ -58,10 +58,10 @@ class SlitPick:
 
     def __call__(self, bottom_left=None, top_right=None, wcs_index=0, 
                  wcs_shift=None, norm=None, line_width=5, img_wow=False,
-                 init_gui=True):
+                 init_gui=True, backend='Qt5Agg'):
 
         if init_gui:
-            matplotlib.use('Qt5Agg')
+            matplotlib.use(backend)
 
         self.bottom_left = bottom_left
         self.top_right = top_right
