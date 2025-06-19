@@ -309,7 +309,9 @@ class MapSequenceCoalign(MapSequence):
         
 
         plt.show()
-
+        if plt.get_backend() in ['inline','nbAgg','ipympl']:
+            plt.ion()
+            print("did it?")
         return None
     
     def _update_bottom_left_x(self, expression):
@@ -376,6 +378,8 @@ class MapSequenceCoalign(MapSequence):
 
     def _close_window(self, event):
         print('The selected region is: ', 'Bottom Left', self.bottom_left, 'Top Right', self.top_right)
+        if plt.get_backend() in ['inline','nbAgg','ipympl']:
+            plt.ioff()
         plt.close()
 
 
