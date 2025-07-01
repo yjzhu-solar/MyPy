@@ -77,9 +77,12 @@ class SunBlinker():
 class ImageBlinker():
     def __init__(self, image1, image2, fps=5, figsize=(5,5),
                  norm1=None, norm2=None, aspect=1,
-                 save_fname=None, **kwargs) -> None:
+                 save_fname=None, cmap1=None,
+                 cmap2=None,**kwargs) -> None:
         self.image1 = image1
         self.image2 = image2
+        self.cmap1 = cmap1
+        self.cmap2 = cmap2
         self.fps = fps
         self.figsize = figsize
         self.aspect = aspect    
@@ -122,16 +125,20 @@ class ImageBlinker():
         self.fig = plt.figure(figsize=self.figsize)
         self.ax = self.fig.add_subplot(111)
         self.im = self.ax.imshow(self.image1, norm=self.norm1, origin='lower',
-                                 aspect=self.aspect, **self.kwargs)
+                                 aspect=self.aspect, cmap=self.cmap1, **self.kwargs)
 
     def _update_plot(self,i):
         # self.ax.clear()   
         if i == 0:
             self.im.set_array(self.image1)
             self.im.set_norm(self.norm1)
+            if self.cmap1 is not None:
+                self.im.set_cmap(self.cmap1)
         else:
             self.im.set_array(self.image2)
             self.im.set_norm(self.norm2)
+            if self.cmap2 is not None:
+                self.im.set_cmap(self.cmap2)
         
         return [self.im]
 
