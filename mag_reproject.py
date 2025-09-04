@@ -111,10 +111,10 @@ import os
 #    section "Generic Dynamic Frames" and "Generic Inertial Frames".
 
 
-#   A self-defined Earth-centered mirror Helioprojective Cartesian (HPC) frame:
+#   A self-defined Earth-centered mirrored Helioprojective Cartesian (HPC) frame:
 #       SPICE Frame Name            Common names and other designators
 #       --------------------        --------------------------------------
-#       
+#       EARTH_SOLAR_MHP             Earth-centered mirrored Helioprojective Cartesian (HPC)
 # ------------------------------------------------------------------------------
 
 spice_kernel_path = "../spice_kernel/"
@@ -124,7 +124,7 @@ spice_kernels = [
     "pck00010.tpc",           # PCK for IAU_SUN orientation
     "solo_ANC_soc-sci-fk_V08.tf",  # heliospheric frames
     "solo_ANC_soc-orbit-stp_20200210-20301120_377_V1_00465_V01.bsp", # Solar Orbiter ephemeris
-    "earth_hpc.tf"    # Earth-centered Helioprojective Cartesian
+    "earth_hpc.tf"    # Earth-centered mirrored Helioprojective Cartesian
 ]
 
 # load kernels
