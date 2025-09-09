@@ -994,24 +994,27 @@ class SpectrumFitRow:
 
         self.custom_func = custom_func
         self.custom_init = custom_init
-    
-        
+
         #fitted parameters
-        self.line_wvl_fit = np.zeros((self.frame_number,self.line_number))
-        self.line_wvl_err = np.zeros((self.frame_number,self.line_number))
+        if self.custom_func is None:        
+            self.line_wvl_fit = np.zeros((self.frame_number,self.line_number))
+            self.line_wvl_err = np.zeros((self.frame_number,self.line_number))
 
-        self.int_total_fit = np.zeros((self.frame_number,self.line_number))
-        self.int_total_err = np.zeros((self.frame_number,self.line_number))
+            self.int_total_fit = np.zeros((self.frame_number,self.line_number))
+            self.int_total_err = np.zeros((self.frame_number,self.line_number))
 
-        if same_width is True:
-            self.fwhm_fit = np.zeros(self.frame_number)
-            self.fwhm_err = np.zeros(self.frame_number)
+            if same_width is True:
+                self.fwhm_fit = np.zeros(self.frame_number)
+                self.fwhm_err = np.zeros(self.frame_number)
+            else:
+                self.fwhm_fit = np.zeros((self.frame_number,self.line_number))
+                self.fwhm_err = np.zeros((self.frame_number,self.line_number))
+
+            self.int_cont_fit = np.zeros(self.frame_number)
+            self.int_cont_err = np.zeros(self.frame_number)
         else:
-            self.fwhm_fit = np.zeros((self.frame_number,self.line_number))
-            self.fwhm_err = np.zeros((self.frame_number,self.line_number))
-
-        self.int_cont_fit = np.zeros(self.frame_number)
-        self.int_cont_err = np.zeros(self.frame_number)
+            self.custom_fit = np.zeros((self.frame_number,len(custom_init)))
+            self.custom_err = np.zeros((self.frame_number,len(custom_init)))
 
         #create single fit object
         self.single_fit_list = []
@@ -1052,23 +1055,31 @@ class SpectrumFitRow:
             if (ii == 0) or (prev_init is False):
                 pass
             else:
-                self.single_fit_list[ii].line_wvl_init = self.single_fit_list[ii-1].line_wvl_fit
-                self.single_fit_list[ii].fwhm_init = self.single_fit_list[ii-1].fwhm_fit
-                self.single_fit_list[ii].int_max_init = 2.355*self.single_fit_list[ii-1].int_total_fit/ \
-                    np.sqrt(2.*np.pi)/self.single_fit_list[ii-1].fwhm_fit
+                if self.custom_func is None:
+                    self.single_fit_list[ii].line_wvl_init = self.single_fit_list[ii-1].line_wvl_fit
+                    self.single_fit_list[ii].fwhm_init = self.single_fit_list[ii-1].fwhm_fit
+                    self.single_fit_list[ii].int_max_init = 2.355*self.single_fit_list[ii-1].int_total_fit/ \
+                        np.sqrt(2.*np.pi)/self.single_fit_list[ii-1].fwhm_fit
+                else:
+                    self.single_fit_list[ii].custom_init = self.single_fit_list[ii-1].custom_fit
             
             try:
                 self.single_fit_list[ii].run_lse(ignore_err=ignore_err,absolute_sigma=absolute_sigma)
             except:
                 pass
-            self.line_wvl_fit[ii:,] = self.single_fit_list[ii].line_wvl_fit
-            self.line_wvl_err[ii:,] = self.single_fit_list[ii].line_wvl_err
-            self.int_total_fit[ii,:] = self.single_fit_list[ii].int_total_fit
-            self.int_total_err[ii,:] = self.single_fit_list[ii].int_total_err
-            self.fwhm_fit[ii] = self.single_fit_list[ii].fwhm_fit
-            self.fwhm_err[ii] = self.single_fit_list[ii].fwhm_err
-            self.int_cont_fit[ii] = self.single_fit_list[ii].int_cont_fit
-            self.int_cont_err[ii] = self.single_fit_list[ii].int_cont_err
+            
+            if self.custom_func is None:
+                self.line_wvl_fit[ii:,] = self.single_fit_list[ii].line_wvl_fit
+                self.line_wvl_err[ii:,] = self.single_fit_list[ii].line_wvl_err
+                self.int_total_fit[ii,:] = self.single_fit_list[ii].int_total_fit
+                self.int_total_err[ii,:] = self.single_fit_list[ii].int_total_err
+                self.fwhm_fit[ii] = self.single_fit_list[ii].fwhm_fit
+                self.fwhm_err[ii] = self.single_fit_list[ii].fwhm_err
+                self.int_cont_fit[ii] = self.single_fit_list[ii].int_cont_fit
+                self.int_cont_err[ii] = self.single_fit_list[ii].int_cont_err
+            else:
+                self.custom_fit[ii,:] = self.single_fit_list[ii].custom_fit
+                self.custom_err[ii,:] = self.single_fit_list[ii].custom_err
         
         if clean_obj_list:
             delattr(self,"single_fit_list")
@@ -1269,10 +1280,13 @@ class SpectrumFitRow:
         return ax 
 
     def return_dict(self):
-        return {"line_wvl_fit":self.line_wvl_fit, "line_wvl_err":self.line_wvl_err,
-                "int_total_fit":self.int_total_fit,"int_total_err":self.int_total_err,
-                "fwhm_fit":self.fwhm_fit,"fwhm_err":self.fwhm_err,
-                "int_cont_fit":self.int_cont_fit,"int_cont_err":self.int_cont_err}
+        if self.custom_func is None:
+            return {"line_wvl_fit":self.line_wvl_fit, "line_wvl_err":self.line_wvl_err,
+                    "int_total_fit":self.int_total_fit,"int_total_err":self.int_total_err,
+                    "fwhm_fit":self.fwhm_fit,"fwhm_err":self.fwhm_err,
+                    "int_cont_fit":self.int_cont_fit,"int_cont_err":self.int_cont_err}
+        else:
+            return {"custom_fit":self.custom_fit, "custom_err":self.custom_err}
 
 class SpectrumFit2D:
     '''
@@ -1393,18 +1407,17 @@ class SpectrumFit2D:
                     self.err_tofit[:,jj,:] = np.delete(self.err[:,jj,:],delete_index_all,axis=1)
               
 
+        self.line_number = line_number
+        self.line_wvl_init = np.array(line_wvl_init)
+        self.int_max_init = np.array(int_max_init)
+        self.fwhm_init = np.array(fwhm_init)
+        self.same_width = same_width
+
+        self.int_cont_init = int_cont_init
         #If the custom fitting function is not provided, read the initial 
         #values for the embedded multi-gaussian functions. And create the 
         #Chi2 fitted parameters.
         if self.custom_func is None:
-            self.line_number = line_number
-            self.line_wvl_init = np.array(line_wvl_init)
-            self.int_max_init = np.array(int_max_init)
-            self.fwhm_init = np.array(fwhm_init)
-            self.same_width = same_width
-
-            self.int_cont_init = int_cont_init
-
             #fitted parameters
             self.line_wvl_fit = np.zeros((self.npix_slit,self.npix_raster,self.line_number))
             self.line_wvl_err = np.zeros((self.npix_slit,self.npix_raster,self.line_number))
@@ -1458,23 +1471,28 @@ class SpectrumFit2D:
         if ncpu == 1:
             for ii in range(self.npix_raster):
                 fit_model_dist = self.run_lse_along_slit(ii,ignore_err,absolute_sigma,prev_init)
-                self.line_wvl_fit[:,ii,:] = fit_model_dist["line_wvl_fit"]
-                self.line_wvl_err[:,ii,:] = fit_model_dist["line_wvl_err"]
-                self.int_total_fit[:,ii,:] = fit_model_dist["int_total_fit"]
-                self.int_total_err[:,ii,:] = fit_model_dist["int_total_err"]
 
-                if type(self.same_width) is list:
-                    self.fwhm_fit[:,ii,:] = fit_model_dist["fwhm_fit"]
-                    self.fwhm_err[:,ii,:] = fit_model_dist["fwhm_err"]
-                elif self.same_width is True:
-                    self.fwhm_fit[:,ii] = fit_model_dist["fwhm_fit"]
-                    self.fwhm_err[:,ii] = fit_model_dist["fwhm_err"]
+                if self.custom_func is not None:
+                    self.custom_fit[:,ii,:] = fit_model_dist["custom_fit"]
+                    self.custom_err[:,ii,:] = fit_model_dist["custom_err"]
                 else:
-                    self.fwhm_fit[:,ii,:] = fit_model_dist["fwhm_fit"]
-                    self.fwhm_err[:,ii,:] = fit_model_dist["fwhm_err"]
+                    self.line_wvl_fit[:,ii,:] = fit_model_dist["line_wvl_fit"]
+                    self.line_wvl_err[:,ii,:] = fit_model_dist["line_wvl_err"]
+                    self.int_total_fit[:,ii,:] = fit_model_dist["int_total_fit"]
+                    self.int_total_err[:,ii,:] = fit_model_dist["int_total_err"]
 
-                self.int_cont_fit[:,ii] = fit_model_dist["int_cont_fit"]
-                self.int_cont_err[:,ii] = fit_model_dist["int_cont_err"]
+                    if type(self.same_width) is list:
+                        self.fwhm_fit[:,ii,:] = fit_model_dist["fwhm_fit"]
+                        self.fwhm_err[:,ii,:] = fit_model_dist["fwhm_err"]
+                    elif self.same_width is True:
+                        self.fwhm_fit[:,ii] = fit_model_dist["fwhm_fit"]
+                        self.fwhm_err[:,ii] = fit_model_dist["fwhm_err"]
+                    else:
+                        self.fwhm_fit[:,ii,:] = fit_model_dist["fwhm_fit"]
+                        self.fwhm_err[:,ii,:] = fit_model_dist["fwhm_err"]
+
+                    self.int_cont_fit[:,ii] = fit_model_dist["int_cont_fit"]
+                    self.int_cont_err[:,ii] = fit_model_dist["int_cont_err"]
                 
         else:
             if ncpu > self.npix_raster:
@@ -1486,23 +1504,27 @@ class SpectrumFit2D:
                 pool_out = pool.starmap(self.run_lse_along_slit,args)
 
             for ii in range(self.npix_raster):
-                self.line_wvl_fit[:,ii,:] = pool_out[ii]["line_wvl_fit"]
-                self.line_wvl_err[:,ii,:] = pool_out[ii]["line_wvl_err"]
-                self.int_total_fit[:,ii,:] = pool_out[ii]["int_total_fit"]
-                self.int_total_err[:,ii,:] = pool_out[ii]["int_total_err"]
-
-                if type(self.same_width) is list:
-                    self.fwhm_fit[:,ii,:] = pool_out[ii]["fwhm_fit"]
-                    self.fwhm_err[:,ii,:] = pool_out[ii]["fwhm_err"]
-                elif self.same_width is True:
-                    self.fwhm_fit[:,ii] = pool_out[ii]["fwhm_fit"]
-                    self.fwhm_err[:,ii] = pool_out[ii]["fwhm_err"]
+                if self.custom_func is not None:
+                    self.custom_fit[:,ii,:] = pool_out[ii]["custom_fit"]
+                    self.custom_err[:,ii,:] = pool_out[ii]["custom_err"]
                 else:
-                    self.fwhm_fit[:,ii,:] = pool_out[ii]["fwhm_fit"]
-                    self.fwhm_err[:,ii,:] = pool_out[ii]["fwhm_err"]
+                    self.line_wvl_fit[:,ii,:] = pool_out[ii]["line_wvl_fit"]
+                    self.line_wvl_err[:,ii,:] = pool_out[ii]["line_wvl_err"]
+                    self.int_total_fit[:,ii,:] = pool_out[ii]["int_total_fit"]
+                    self.int_total_err[:,ii,:] = pool_out[ii]["int_total_err"]
 
-                self.int_cont_fit[:,ii] = pool_out[ii]["int_cont_fit"]
-                self.int_cont_err[:,ii] = pool_out[ii]["int_cont_err"]
+                    if type(self.same_width) is list:
+                        self.fwhm_fit[:,ii,:] = pool_out[ii]["fwhm_fit"]
+                        self.fwhm_err[:,ii,:] = pool_out[ii]["fwhm_err"]
+                    elif self.same_width is True:
+                        self.fwhm_fit[:,ii] = pool_out[ii]["fwhm_fit"]
+                        self.fwhm_err[:,ii] = pool_out[ii]["fwhm_err"]
+                    else:
+                        self.fwhm_fit[:,ii,:] = pool_out[ii]["fwhm_fit"]
+                        self.fwhm_err[:,ii,:] = pool_out[ii]["fwhm_err"]
+
+                    self.int_cont_fit[:,ii] = pool_out[ii]["int_cont_fit"]
+                    self.int_cont_err[:,ii] = pool_out[ii]["int_cont_err"]
 
     def plot_fit2d(self,param,line_index=0,xcoord=None,ycoord=None,xmesh=None,ymesh=None,
                     extent=None,vmin=None,vmax=None,scale=None,ax=None,title=None,cmap=None,
