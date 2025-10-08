@@ -117,7 +117,8 @@ import os
 #       EARTH_SOLAR_MHP             Earth-centered mirrored Helioprojective Cartesian (HPC)
 # ------------------------------------------------------------------------------
 
-spice_kernel_path = "../spice_kernel/"
+spice_kernel_path = os.environ.get('SPICE_KERNEL_PATH')
+
 spice_kernels = [
     "naif0012.tls",           # leapseconds
     "de442s.bsp",             # planetary ephemeris
