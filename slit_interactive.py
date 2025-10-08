@@ -15,6 +15,7 @@ Main Features:
 - Support for both SunPy maps and NumPy arrays
 - Comprehensive world coordinate system handling
 - High-performance spacetime analysis
+- Standalone plotting with customizable direction triangles
 
 Key Classes:
 -----------
@@ -23,6 +24,9 @@ SlitPick : Main interactive class for GUI-based slit analysis
 Key Functions:
 -------------
 generate_slit_data_from_points : Create slit data from coordinate points
+generate_straight_slit_data : Create geometric slits with center/length/angle
+plot_slit_position : Standalone plotting with direction triangles
+remove_background : Advanced background removal methods
 generate_straight_slit_data : Create straight slit from geometric parameters
 calculate_slit_pixels : Calculate pixel coordinates along slit curves
 extract_slit_intensity_optimized : High-performance intensity extraction
@@ -50,6 +54,7 @@ from matplotlib.widgets import (TextBox, Button,
 from matplotlib.backend_bases import NavigationToolbar2
 import matplotlib.lines as mlines
 from matplotlib.transforms import Bbox
+from matplotlib.patches import Polygon
 import sunpy
 import sunpy.map
 from sunpy.map import GenericMap, MapSequence
@@ -1453,7 +1458,10 @@ def plot_slit_position(ax, slit_result, show_boundary=True, show_curve=True, sho
                       boundary_color='#58B2DC', curve_color='auto', point_color='auto',
                       boundary_alpha=0.8, curve_alpha=0.9, point_alpha=0.9,
                       point_size=6, curve_width=2, boundary_width=1,
-                      show_legend=True, legend_loc='upper right'):
+                      show_legend=True, legend_loc='upper right',
+                      show_direction=True, triangle_length=20, triangle_anchor_index=None, 
+                      triangle_ratio=0.6, triangle_color='auto', triangle_alpha=None,
+                      direction_text=None, text_color=None, text_offset=5, text_fontsize=10):
     """
     Plot slit position on a provided matplotlib axis (standalone function for non-GUI use).
     
@@ -1536,6 +1544,37 @@ def plot_slit_position(ax, slit_result, show_boundary=True, show_curve=True, sho
     legend_loc : str, optional
         Location for the legend, default is 'upper right'.
         Uses matplotlib legend location specifications.
+    show_direction : bool, optional
+        Whether to show a triangular direction indicator, default is True.
+        The triangle points along the slit direction to show data flow orientation.
+    triangle_length : int, optional
+        Length of the triangle base in pixels along the slit, default is 20.
+        Determines the size of the direction indicator triangle.
+    triangle_anchor_index : int or None, optional
+        Index along the slit where to place the triangle, default is None.
+        If None, automatically places triangle at 1/4 of the slit length.
+        Must be within valid range of slit pixel coordinates.
+    triangle_ratio : float, optional
+        Height ratio of the triangle relative to its base, default is 0.6.
+        Controls the triangle's aspect ratio and visual prominence.
+    triangle_color : str, optional
+        Color for the direction triangle, default is 'auto'.
+        'auto' uses the same color as the curve. Can be any matplotlib color.
+    triangle_alpha : float or None, optional
+        Transparency for the triangle, default is None.
+        If None, uses the same alpha as boundary_alpha.
+    direction_text : str or None, optional
+        Optional text label to display near the triangle, default is None.
+        Useful for labeling slit direction or identification.
+    text_color : str or None, optional
+        Color for the direction text, default is None.
+        If None, uses the same color as triangle_color.
+    text_offset : float, optional
+        Distance offset for text from triangle center, default is 5.
+        Positive values move text further from the triangle.
+    text_fontsize : float, optional
+        Font size for direction text, default is 10.
+        Standard matplotlib font size specification.
         
     Returns
     -------
@@ -1545,6 +1584,8 @@ def plot_slit_position(ax, slit_result, show_boundary=True, show_curve=True, sho
         - 'boundary': matplotlib.lines.Line2D or None - The boundary polygon
         - 'curve': matplotlib.lines.Line2D or None - The fitted curve  
         - 'points': matplotlib.lines.Line2D or None - The control points
+        - 'triangle': matplotlib.patches.Polygon or None - The direction triangle
+        - 'text': matplotlib.text.Text or None - The direction text
         - 'legend': matplotlib.legend.Legend or None - The legend object
         - 'method': str - The curve fitting method used
         
@@ -1611,6 +1652,19 @@ def plot_slit_position(ax, slit_result, show_boundary=True, show_curve=True, sho
     ...     boundary_alpha=0.6, curve_width=3, point_size=8,
     ...     show_legend=True, legend_loc='lower left')
     
+    >>> # Direction triangle with custom parameters
+    >>> plot_elements = plot_slit_position(
+    ...     ax, result,
+    ...     show_direction=True, triangle_length=30, triangle_ratio=0.8,
+    ...     triangle_color='cyan', direction_text='Flow →', 
+    ...     text_fontsize=12, text_offset=10)
+    
+    >>> # Minimal overlay with direction indicator only
+    >>> plot_elements = plot_slit_position(
+    ...     ax, result,
+    ...     show_boundary=False, show_curve=False, show_control_points=False,
+    ...     show_direction=True, triangle_color='red', triangle_alpha=0.8)
+    
     >>> # Minimal overlay (boundary only)
     >>> plot_elements = plot_slit_position(
     ...     ax, result,
@@ -1663,6 +1717,8 @@ def plot_slit_position(ax, slit_result, show_boundary=True, show_curve=True, sho
         'boundary': None,
         'curve': None, 
         'points': None,
+        'triangle': None,
+        'text': None,
         'legend': None,
         'method': 'unknown'
     }
@@ -1757,6 +1813,70 @@ def plot_slit_position(ax, slit_result, show_boundary=True, show_curve=True, sho
                 
             except (ValueError, TypeError) as e:
                 warnings.warn(f"Could not plot control points: {e}")
+    
+    # Plot direction triangle if requested
+    if show_direction and pixels_idx is not None and pixels_idy is not None:
+        try:
+            # Determine triangle color and alpha
+            if triangle_color == 'auto':
+                triangle_color = curve_color if curve_color != 'auto' else boundary_color
+            if triangle_alpha is None:
+                triangle_alpha = boundary_alpha
+            
+            # Determine triangle anchor position
+            slit_length = pixels_idx.shape[0]
+            if triangle_anchor_index is None:
+                triangle_anchor_index = max(0, min(slit_length // 4, slit_length - triangle_length - 1))
+            
+            # Ensure valid indices
+            triangle_anchor_index = max(0, min(triangle_anchor_index, slit_length - triangle_length - 1))
+            triangle_end_index = min(triangle_anchor_index + triangle_length, slit_length - 1)
+            
+            # Get triangle anchor points along the slit center line (use first column for center)
+            triangle_anchor_point_0 = np.array([pixels_idx[triangle_anchor_index, 0], 
+                                               pixels_idy[triangle_anchor_index, 0]])
+            triangle_anchor_point_1 = np.array([pixels_idx[triangle_end_index, 0], 
+                                               pixels_idy[triangle_end_index, 0]])
+            
+            # Calculate triangle geometry
+            triangle_bottom_vec = triangle_anchor_point_1 - triangle_anchor_point_0
+            # Rotate 90 degrees and scale by ratio
+            triangle_bottom_vec_rot_90 = np.array([triangle_bottom_vec[1], -triangle_bottom_vec[0]]) * triangle_ratio
+            triangle_anchor_point_2 = triangle_anchor_point_0 + triangle_bottom_vec_rot_90
+            
+            # Create triangle vertices
+            triangle_points = np.vstack((triangle_anchor_point_0, triangle_anchor_point_1, triangle_anchor_point_2))
+            
+            # Create and add triangle patch
+            triangle_patch = Polygon(triangle_points, closed=True, 
+                                   edgecolor=triangle_color, facecolor=triangle_color, 
+                                   alpha=triangle_alpha, label='Direction')
+            ax.add_patch(triangle_patch)
+            plot_elements['triangle'] = triangle_patch
+            
+            # Add direction text if requested
+            if direction_text is not None:
+                if text_color is None:
+                    text_color = triangle_color
+                
+                # Calculate text position at slit center with offset
+                slit_center_x = np.nanmean(pixels_idx)
+                slit_center_y = np.nanmean(pixels_idy)
+                
+                # Normalize the perpendicular vector for text offset
+                triangle_bottom_vec_rot_90_norm = triangle_bottom_vec_rot_90 / np.linalg.norm(triangle_bottom_vec_rot_90)
+                
+                # Position text with offset
+                text_x = slit_center_x + text_offset * triangle_bottom_vec_rot_90_norm[0]
+                text_y = slit_center_y + text_offset * triangle_bottom_vec_rot_90_norm[1]
+                
+                text_obj = ax.text(text_x, text_y, direction_text,
+                                 color=text_color, fontsize=text_fontsize, 
+                                 ha='center', va='center')
+                plot_elements['text'] = text_obj
+                
+        except (ValueError, TypeError, IndexError) as e:
+            warnings.warn(f"Could not plot direction triangle: {e}")
     
     # Add legend if requested and we have labeled elements
     if show_legend:
@@ -3210,8 +3330,22 @@ fig, ax = plt.subplots(figsize=(8, 8))
 ax.imshow(image_data, cmap='gray')
 for slit_result, color in zip(slits, colors):
     plot_slit_position(ax, slit_result, curve_color=color, point_color=color, 
-                      show_legend=False, boundary_alpha=0.5)
-ax.set_title('Multiple Slits')
+                      show_legend=False, boundary_alpha=0.5,
+                      triangle_color=color, direction_text=f'{color} slit')
+ax.set_title('Multiple Slits with Direction Indicators')
+
+# Direction-focused visualization
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.imshow(velocity_data, cmap='RdBu_r')
+result = generate_straight_slit_data(200, 150, 120, 30, data_cube, 'NDArray')
+plot_elements = plot_slit_position(
+    ax, result,
+    show_direction=True, triangle_length=25, triangle_ratio=0.7,
+    triangle_color='yellow', triangle_alpha=0.9,
+    direction_text='Flow Direction', text_color='white', 
+    text_fontsize=12, text_offset=8,
+    boundary_alpha=0.6, curve_color='white')
+ax.set_title('Slit with Flow Direction Indicator')
 plt.show()
 ```
 
@@ -3355,6 +3489,8 @@ Tips and Best Practices
 - Always validate your slit positioning on a representative frame first
 - Use plot_slit_position() for custom matplotlib visualizations without GUI
 - Combine multiple slits on same plot with different colors for comparison
+- Triangle direction indicators help visualize data flow and slit orientation
+- Adjust triangle_length and triangle_ratio for optimal visual balance
 
 For more detailed information, see function docstrings and inline comments.
 """
