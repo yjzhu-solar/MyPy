@@ -1449,329 +1449,6 @@ def generate_straight_slit_data(center_x, center_y, length, angle, image_seq_pre
     return result
 
 
-def plot_slit_position(ax, slit_result, show_boundary=True, show_curve=True, show_control_points=True,
-                      boundary_color='#58B2DC', curve_color='auto', point_color='auto',
-                      boundary_alpha=0.8, curve_alpha=0.9, point_alpha=0.9,
-                      point_size=6, curve_width=2, boundary_width=1,
-                      show_legend=True, legend_loc='upper right'):
-    """
-    Plot slit position on a provided matplotlib axis (standalone function for non-GUI use).
-    
-    This function allows you to visualize slit positions on any matplotlib axis without
-    requiring the interactive GUI. It's ideal for creating custom plots, batch processing
-    visualizations, publication figures, or integrating slit visualization into other
-    analysis workflows.
-    
-    **Key Features:**
-    
-    - **Flexible plotting**: Works with any matplotlib axis
-    - **Customizable appearance**: Full control over colors, styles, and transparency
-    - **Method-aware visualization**: Automatic color coding based on curve fitting method
-    - **Component control**: Toggle boundary, curve, and control points independently
-    - **Publication ready**: High-quality output suitable for scientific publications
-    
-    **Visual Components:**
-    
-    1. **Slit boundary**: Polygon showing the full slit width and extent
-    2. **Center curve**: The fitted curve path (linear/parabolic/spline)
-    3. **Control points**: The original user-selected or computed points
-    4. **Legend**: Method identification and visual guide
-    
-    Parameters
-    ----------
-    ax : matplotlib.axes.Axes
-        The matplotlib axis on which to plot the slit position.
-        Can be a regular axis or one with projection (e.g., WCS projection).
-    slit_result : dict
-        Result dictionary from generate_slit_data_from_points() or 
-        generate_straight_slit_data() containing:
-        
-        - 'pixels_idx', 'pixels_idy': Full slit pixel coordinates
-        - 'curve_info': Curve fitting metadata (method, curve coordinates)
-        - 'select_x', 'select_y': Control point coordinates (if available)
-        
-    show_boundary : bool, optional
-        Whether to show the slit boundary polygon, default is True.
-        The boundary shows the full width extent of the slit.
-    show_curve : bool, optional
-        Whether to show the fitted curve line, default is True.
-        The curve represents the center path of the slit.
-    show_control_points : bool, optional
-        Whether to show the control points, default is True.
-        Control points are the original points used to define the slit.
-    boundary_color : str, optional
-        Color for the slit boundary polygon, default is '#58B2DC' (light blue).
-        Can be any matplotlib color specification.
-    curve_color : str, optional
-        Color for the fitted curve line, default is 'auto'.
-        'auto' selects color based on fitting method:
-        - Linear (2 points): Red '#FF6B6B'
-        - Parabolic (3 points): Teal '#4ECDC4'  
-        - Spline (4+ points): Blue '#45B7D1'
-        - Fallback: Light salmon '#FFA07A'
-    point_color : str, optional
-        Color for control points, default is 'auto' (matches curve_color).
-        Can be any matplotlib color specification.
-    boundary_alpha : float, optional
-        Transparency for boundary polygon, default is 0.8.
-        Range: 0.0 (transparent) to 1.0 (opaque).
-    curve_alpha : float, optional
-        Transparency for curve line, default is 0.9.
-        Range: 0.0 (transparent) to 1.0 (opaque).
-    point_alpha : float, optional
-        Transparency for control points, default is 0.9.
-        Range: 0.0 (transparent) to 1.0 (opaque).
-    point_size : float, optional
-        Size of control point markers, default is 6.
-        Larger values create bigger markers.
-    curve_width : float, optional
-        Width of the curve line, default is 2.
-        Larger values create thicker lines.
-    boundary_width : float, optional
-        Width of the boundary polygon line, default is 1.
-        Larger values create thicker boundary lines.
-    show_legend : bool, optional
-        Whether to add a legend identifying the curve fitting method, default is True.
-        Legend helps identify the type of curve fitting used.
-    legend_loc : str, optional
-        Location for the legend, default is 'upper right'.
-        Uses matplotlib legend location specifications.
-        
-    Returns
-    -------
-    plot_elements : dict
-        Dictionary containing matplotlib objects for further customization:
-        
-        - 'boundary': matplotlib.lines.Line2D or None - The boundary polygon
-        - 'curve': matplotlib.lines.Line2D or None - The fitted curve  
-        - 'points': matplotlib.lines.Line2D or None - The control points
-        - 'legend': matplotlib.legend.Legend or None - The legend object
-        - 'method': str - The curve fitting method used
-        
-        These objects can be used for further customization, removal, or
-        property modification after plotting.
-        
-    Raises
-    ------
-    KeyError
-        If required keys are missing from slit_result dictionary.
-    ValueError
-        If slit_result contains invalid or incomplete data.
-    TypeError
-        If ax is not a valid matplotlib axis.
-        
-    Notes
-    -----
-    **Color Coding by Method:**
-    
-    When using 'auto' colors, the function automatically assigns colors based
-    on the curve fitting method used:
-    
-    - **Linear (2 points)**: Red - indicates straight line interpolation
-    - **Parabolic (3 points)**: Teal - indicates quadratic curve fitting
-    - **Spline (4+ points)**: Blue - indicates B-spline interpolation
-    - **Fallback methods**: Light salmon - indicates alternative approaches
-    
-    **Integration with Existing Plots:**
-    
-    This function is designed to overlay slit positions on existing image plots.
-    It preserves the current axis limits and other plot properties.
-    
-    **Performance Considerations:**
-    
-    - Very lightweight - suitable for batch processing many slits
-    - No GUI overhead - pure matplotlib rendering
-    - Memory efficient - only creates necessary plot objects
-    
-    **Customization Tips:**
-    
-    - Use lower alpha values for subtle overlays on busy images
-    - Adjust line widths based on image resolution and intended use
-    - Consider color contrast with underlying image data
-    - Legend can be customized further using returned legend object
-    
-    Examples
-    --------
-    >>> # Basic usage with automatic styling
-    >>> import matplotlib.pyplot as plt
-    >>> fig, ax = plt.subplots()
-    >>> ax.imshow(image_data, cmap='gray')
-    >>> 
-    >>> # Generate slit data
-    >>> result = generate_straight_slit_data(200, 150, 100, 45, data, 'NDArray')
-    >>> 
-    >>> # Plot slit position
-    >>> plot_elements = plot_slit_position(ax, result)
-    >>> plt.show()
-    
-    >>> # Custom styling for publication
-    >>> plot_elements = plot_slit_position(
-    ...     ax, result,
-    ...     boundary_color='white', curve_color='red', point_color='yellow',
-    ...     boundary_alpha=0.6, curve_width=3, point_size=8,
-    ...     show_legend=True, legend_loc='lower left')
-    
-    >>> # Minimal overlay (boundary only)
-    >>> plot_elements = plot_slit_position(
-    ...     ax, result,
-    ...     show_curve=False, show_control_points=False,
-    ...     boundary_color='cyan', boundary_alpha=0.5)
-    
-    >>> # Multiple slits with different colors
-    >>> results = [result1, result2, result3]
-    >>> colors = ['red', 'blue', 'green']
-    >>> for result, color in zip(results, colors):
-    ...     plot_slit_position(ax, result, curve_color=color, 
-    ...                       point_color=color, show_legend=False)
-    
-    >>> # Working with WCS projection
-    >>> fig = plt.figure()
-    >>> ax = fig.add_subplot(projection=wcs)
-    >>> ax.imshow(solar_image.data)
-    >>> plot_elements = plot_slit_position(ax, sunpy_result)
-    >>> ax.set_xlabel('Solar X [arcsec]')
-    >>> ax.set_ylabel('Solar Y [arcsec]')
-    
-    >>> # Batch processing for multiple slits
-    >>> fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-    >>> for i, (ax, result) in enumerate(zip(axes.flat, slit_results)):
-    ...     ax.imshow(images[i], cmap='viridis')
-    ...     plot_slit_position(ax, result, show_legend=(i==0))  # Legend only on first plot
-    ...     ax.set_title(f'Slit {i+1}')
-    
-    See Also
-    --------
-    generate_slit_data_from_points : Generate slit data from point coordinates
-    generate_straight_slit_data : Generate slit data from geometric parameters
-    SlitPick : Interactive GUI class for slit analysis
-    """
-    # Validate inputs
-    if not hasattr(ax, 'plot'):
-        raise TypeError("ax must be a valid matplotlib axis object")
-    
-    if not isinstance(slit_result, dict):
-        raise ValueError("slit_result must be a dictionary")
-    
-    # Check for required keys
-    required_keys = ['pixels_idx', 'pixels_idy']
-    for key in required_keys:
-        if key not in slit_result:
-            raise KeyError(f"Required key '{key}' not found in slit_result")
-    
-    # Initialize return object
-    plot_elements = {
-        'boundary': None,
-        'curve': None, 
-        'points': None,
-        'legend': None,
-        'method': 'unknown'
-    }
-    
-    pixels_idx = slit_result['pixels_idx']
-    pixels_idy = slit_result['pixels_idy']
-    
-    # Plot slit boundary if requested
-    if show_boundary and pixels_idx is not None and pixels_idy is not None:
-        try:
-            # Create boundary polygon coordinates
-            boundary_x = np.concatenate((pixels_idx[:,0], pixels_idx[-1,1:],
-                                       pixels_idx[-1::-1,-1], pixels_idx[0,-1::-1]))
-            boundary_y = np.concatenate((pixels_idy[:,0], pixels_idy[-1,1:],
-                                       pixels_idy[-1::-1,-1], pixels_idy[0,-1::-1]))
-            
-            # Plot boundary
-            boundary_line = ax.plot(boundary_x, boundary_y, color=boundary_color, 
-                                  linewidth=boundary_width, alpha=boundary_alpha,
-                                  label='Slit Boundary')[0]
-            plot_elements['boundary'] = boundary_line
-            
-        except (IndexError, ValueError) as e:
-            warnings.warn(f"Could not plot boundary: {e}")
-    
-    # Determine curve fitting method and colors
-    curve_info = slit_result.get('curve_info', {})
-    method = curve_info.get('method', 'unknown')
-    plot_elements['method'] = method
-    
-    # Auto-select colors based on method
-    if curve_color == 'auto':
-        if method == 'linear':
-            curve_color = '#FF6B6B'  # Red for linear
-        elif method in ['parabola', 'parabolic']:
-            curve_color = '#4ECDC4'  # Teal for parabola
-        elif method == 'spline':
-            curve_color = '#45B7D1'  # Blue for spline
-        else:
-            curve_color = '#FFA07A'  # Light salmon for fallback
-    
-    if point_color == 'auto':
-        point_color = curve_color
-    
-    # Plot fitted curve if available and requested
-    if show_curve and curve_info is not None:
-        curve_x = curve_info.get('curve_x', None)
-        curve_y = curve_info.get('curve_y', None)
-        
-        if curve_x is not None and curve_y is not None:
-            try:
-                # Create method label for legend
-                if method == 'linear':
-                    method_label = 'Linear (2 nodes)'
-                elif method in ['parabola', 'parabolic']:
-                    method_label = 'Parabolic (3 nodes)'
-                elif method == 'spline':
-                    n_nodes = len(slit_result.get('select_x', [0, 0, 0, 0]))  # Default to 4 for spline
-                    method_label = f'Spline ({n_nodes} nodes)'
-                else:
-                    n_nodes = len(slit_result.get('select_x', [0, 0]))
-                    method_label = f'{method.title()} ({n_nodes} nodes)'
-                
-                curve_line = ax.plot(curve_x, curve_y, color=curve_color, 
-                                   linewidth=curve_width, alpha=curve_alpha,
-                                   label=method_label)[0]
-                plot_elements['curve'] = curve_line
-                
-            except (ValueError, TypeError) as e:
-                warnings.warn(f"Could not plot curve: {e}")
-    
-    # Plot control points if available and requested
-    if show_control_points:
-        # Try to get control points from result
-        select_x = slit_result.get('select_x', None)
-        select_y = slit_result.get('select_y', None)
-        
-        # For geometric slits, extract from start/end points
-        if select_x is None and 'start_point' in slit_result and 'end_point' in slit_result:
-            start_point = slit_result['start_point']
-            end_point = slit_result['end_point']
-            select_x = [start_point[0], end_point[0]]
-            select_y = [start_point[1], end_point[1]]
-        
-        if select_x is not None and select_y is not None:
-            try:
-                points_line = ax.plot(select_x, select_y, marker='o', markersize=point_size,
-                                    markerfacecolor=point_color, markeredgecolor='white',
-                                    markeredgewidth=1.5, linestyle='none', 
-                                    alpha=point_alpha, label='Control Points')[0]
-                plot_elements['points'] = points_line
-                
-            except (ValueError, TypeError) as e:
-                warnings.warn(f"Could not plot control points: {e}")
-    
-    # Add legend if requested and we have labeled elements
-    if show_legend:
-        # Check if any plotted elements have labels
-        handles, labels = ax.get_legend_handles_labels()
-        if handles:
-            try:
-                legend = ax.legend(loc=legend_loc)
-                plot_elements['legend'] = legend
-            except Exception as e:
-                warnings.warn(f"Could not create legend: {e}")
-    
-    return plot_elements
-
-
 class SlitPick:
     """
     Interactive and programmatic slit analysis tool for solar physics time-series data.
@@ -3172,56 +2849,13 @@ result = generate_straight_slit_data(300, 200, 80, 90, map_sequence, 'SunpyMap')
 result = generate_straight_slit_data(250, 300, 120, 45, map_sequence, 'SunpyMap')
 ```
 
-5. Standalone Slit Position Plotting (No GUI):
-```python
-# Plot slit position on custom matplotlib axis
-import matplotlib.pyplot as plt
-
-# Create figure with your preferred layout
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-
-# Display your images
-ax1.imshow(image_data, cmap='viridis')
-ax2.imshow(std_image, cmap='magma')
-
-# Generate slit data programmatically
-result = generate_straight_slit_data(200, 150, 100, 45, data_cube, 'NDArray')
-
-# Plot slit position on both axes
-plot_elements1 = plot_slit_position(ax1, result, show_legend=True)
-plot_elements2 = plot_slit_position(ax2, result, boundary_color='white', 
-                                   curve_color='cyan', show_legend=False)
-
-# Customize further if needed
-ax1.set_title('Original Image with Slit')
-ax2.set_title('Standard Deviation with Slit')
-plt.tight_layout()
-plt.show()
-
-# Multiple slits with different colors
-slits = [
-    generate_straight_slit_data(200, 150, 80, 0, data_cube, 'NDArray'),    # Horizontal
-    generate_straight_slit_data(250, 200, 80, 90, data_cube, 'NDArray'),   # Vertical
-    generate_straight_slit_data(300, 250, 80, 45, data_cube, 'NDArray'),   # Diagonal
-]
-colors = ['red', 'blue', 'green']
-
-fig, ax = plt.subplots(figsize=(8, 8))
-ax.imshow(image_data, cmap='gray')
-for slit_result, color in zip(slits, colors):
-    plot_slit_position(ax, slit_result, curve_color=color, point_color=color, 
-                      show_legend=False, boundary_alpha=0.5)
-ax.set_title('Multiple Slits')
-plt.show()
-```
-
 Advanced Features
 ----------------
 
-6. Background Removal:
+5. Background Removal:
 ```python
 # Apply different background removal methods
-from slit_interactive import remove_background
+from slit_interactive_re import remove_background
 
 # Median background removal (robust, recommended)
 clean_data, background = remove_background(slit_intensity, method='median')
@@ -3237,7 +2871,7 @@ results = compare_background_methods(slit_intensity,
                                    methods=['median', 'percentile', 'morphological'])
 ```
 
-7. Working with Results:
+6. Working with Results:
 ```python
 # Extract data from results dictionary
 slit_intensity = result['slit_intensity']      # Main intensity data
@@ -3256,7 +2890,7 @@ if 'pixel_distance' in result:
     pixel_distances = result['pixel_distance'] # Pixel-based distances
 ```
 
-8. Batch Processing:
+7. Batch Processing:
 ```python
 # Process multiple slits programmatically
 slit_configs = [
@@ -3278,7 +2912,7 @@ for config in slit_configs:
 Working with Different Data Types
 --------------------------------
 
-9. SunPy Maps:
+8. SunPy Maps:
 ```python
 # Load SunPy map sequence
 maps = sunpy.map.Map("*.fits")
@@ -3291,7 +2925,7 @@ result = generate_slit_data_from_points(
 )
 ```
 
-10. NumPy Arrays:
+9. NumPy Arrays:
 ```python
 # Load data as NumPy array (shape: y, x, time)
 data_cube = np.load("data_cube.npy")  # Shape: (ny, nx, nt)
@@ -3305,7 +2939,7 @@ result = generate_slit_data_from_points(
 Performance Optimization
 -----------------------
 
-11. High-Performance Extraction:
+10. High-Performance Extraction:
 ```python
 # The module automatically uses RegularGridInterpolator for optimal performance
 # For large datasets, consider:
@@ -3324,7 +2958,7 @@ clean_data, _ = remove_background(result['slit_intensity'], method='median')
 Error Handling and Validation
 -----------------------------
 
-12. Robust Usage:
+11. Robust Usage:
 ```python
 try:
     result = generate_straight_slit_data(center_x, center_y, length, angle, 
@@ -3353,8 +2987,6 @@ Tips and Best Practices
 - Use appropriate line_width based on your spatial resolution requirements
 - For batch processing, consider using multiprocessing for independent slits
 - Always validate your slit positioning on a representative frame first
-- Use plot_slit_position() for custom matplotlib visualizations without GUI
-- Combine multiple slits on same plot with different colors for comparison
 
 For more detailed information, see function docstrings and inline comments.
 """
