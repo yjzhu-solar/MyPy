@@ -1749,8 +1749,10 @@ def plot_slit_position(ax, slit_result, show_boundary=True, show_curve=True, sho
     method = curve_info.get('method', 'unknown')
     plot_elements['method'] = method
     
-    # Auto-select colors based on method
     if curve_color == 'auto':
+        curve_color = boundary_color  # Default to boundary color if auto
+    # Auto-select colors based on method
+    elif curve_color == 'method':
         if method == 'linear':
             curve_color = '#FF6B6B'  # Red for linear
         elif method in ['parabola', 'parabolic']:
