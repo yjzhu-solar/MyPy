@@ -2819,7 +2819,7 @@ class SlitPick:
                                                              stretch=AsinhStretch(0.5)))
 
     def _switch_bg_remove(self,label):
-        if label == 'BG Remove' and self.successful:
+        if label == 'Rm BG' and self.successful:
             self.bg_remove_on = not self.bg_remove_on
             if self.bg_remove_on:
                 self._apply_background_removal()
