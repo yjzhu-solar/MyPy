@@ -100,13 +100,16 @@ def remove_background(slit_intensity, method='median', **kwargs):
     - **percentile**: Adjustable robustness, good for asymmetric noise
     - **morphological**: Preserves sharp features, excellent for spike-like events  
     - **running_min**: Adaptive to gradual changes, good for drifting baselines
+    - **running_percentile**: Adaptive percentile-based background, tracks slow variations
+    - **running_mean**: Simple moving average, smooth adaptive background
     - **gaussian**: Traditional smoothing, good for high-frequency noise removal
     
     **Recommended Usage:**
     - For most solar physics applications: 'median' (default)
-    - For data with known baseline drift: 'running_min'
+    - For data with known baseline drift: 'running_min' or 'running_mean'
     - For preserving fine temporal structures: 'morphological'
-    - For custom threshold control: 'percentile'
+    - For custom threshold control: 'percentile' or 'running_percentile'
+    - For tracking slowly varying backgrounds: 'running_percentile' or 'running_mean'
     
     Parameters
     ----------
@@ -132,6 +135,14 @@ def remove_background(slit_intensity, method='median', **kwargs):
         - **'running_min'**: Applies running minimum filter along time axis.
           Adapts to gradually changing backgrounds. Good for drifting baselines
           and long-term trend removal.
+          
+        - **'running_percentile'**: Applies running percentile filter along time axis.
+          Combines advantages of percentile and running filters. Tracks slowly
+          varying backgrounds while maintaining adjustable robustness to outliers.
+          
+        - **'running_mean'**: Applies running mean (moving average) filter along time axis.
+          Simple adaptive background estimation. Good for smoothly varying baselines
+          with minimal computational overhead.
           
         - **'gaussian'**: Traditional Gaussian blur background estimation.
           Provides smooth background estimate, good for high-frequency noise.
@@ -160,6 +171,22 @@ def remove_background(slit_intensity, method='median', **kwargs):
             Window size for running minimum filter (default: 15).
             Should be larger than typical signal duration but smaller than
             background variation timescales. Typically 10-50 time frames.
+            
+        **For 'running_percentile' method:**
+        - percentile_window : int, optional
+            Window size for running percentile filter (default: 15).
+            Controls the temporal extent of the sliding window.
+            Larger values = smoother background, slower adaptation.
+        - percentile : float, optional
+            Percentile value to use within each window (default: 10).
+            Lower values = more aggressive background removal.
+            Range: 0-50 typical for background estimation.
+            
+        **For 'running_mean' method:**
+        - mean_window : int, optional
+            Window size for running mean filter (default: 15).
+            Controls the temporal smoothing scale.
+            Larger values = smoother background, less responsive to changes.
             
         **For 'gaussian' method:**
         - gauss_size : int, optional
@@ -193,7 +220,9 @@ def remove_background(slit_intensity, method='median', **kwargs):
     2. **Percentile Method**: Uses np.percentile(data, p, axis=1) for custom thresholds
     3. **Morphological Method**: Applies skimage opening with disk element
     4. **Running Min Method**: Uses scipy.ndimage.minimum_filter1d for adaptive baselines
-    5. **Gaussian Method**: Uses scipy.ndimage.gaussian_filter for smooth backgrounds
+    5. **Running Percentile Method**: Uses scipy.ndimage.percentile_filter for adaptive percentile
+    6. **Running Mean Method**: Uses scipy.ndimage.uniform_filter1d for moving average
+    7. **Gaussian Method**: Uses cv2.GaussianBlur for smooth backgrounds
     
     **Performance Considerations:**
     
@@ -225,6 +254,15 @@ def remove_background(slit_intensity, method='median', **kwargs):
     >>> # Adaptive background for drifting baseline
     >>> clean_data, bg = remove_background(intensity_data, 
     ...                                   method='running_min', min_window=20)
+    
+    >>> # Adaptive percentile background tracking
+    >>> clean_data, bg = remove_background(intensity_data,
+    ...                                   method='running_percentile',
+    ...                                   percentile_window=25, percentile=15)
+    
+    >>> # Simple moving average background
+    >>> clean_data, bg = remove_background(intensity_data,
+    ...                                   method='running_mean', mean_window=30)
     
     >>> # No background removal for comparison
     >>> original_data, zero_bg = remove_background(intensity_data, method='none')
@@ -267,6 +305,27 @@ def remove_background(slit_intensity, method='median', **kwargs):
         # Apply minimum filter along time axis
         background = minimum_filter1d(slit_intensity, size=min_window, axis=1)
         
+    elif method == 'running_percentile':
+        # Running percentile filter - adaptive percentile-based background
+        from scipy.ndimage import percentile_filter
+        percentile_window = kwargs.get('percentile_window', 15)
+        percentile = kwargs.get('percentile', 10)
+        
+        # Apply percentile filter along time axis for each distance
+        background = np.zeros_like(slit_intensity)
+        for i in range(slit_intensity.shape[0]):
+            background[i, :] = percentile_filter(slit_intensity[i, :], 
+                                                 percentile=percentile,
+                                                 size=percentile_window)
+    
+    elif method == 'running_mean':
+        # Running mean filter - simple moving average for adaptive background
+        from scipy.ndimage import uniform_filter1d
+        mean_window = kwargs.get('mean_window', 15)
+        
+        # Apply uniform (mean) filter along time axis
+        background = uniform_filter1d(slit_intensity, size=mean_window, axis=1)
+        
     elif method == 'gaussian':
         # Original Gaussian blur method (for comparison)
         import cv2
@@ -301,7 +360,8 @@ def compare_background_methods(slit_intensity, methods=None, **kwargs):
         Dictionary with method names as keys and (processed_data, background) as values
     """
     if methods is None:
-        methods = ['median', 'percentile', 'morphological', 'running_min', 'gaussian']
+        methods = ['median', 'percentile', 'morphological', 'running_min', 
+                   'running_percentile', 'running_mean', 'gaussian']
     
     results = {}
     for method in methods:
