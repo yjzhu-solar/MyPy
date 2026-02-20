@@ -152,8 +152,8 @@ def iris_spec_map_interp_from_header(filename,data,mask=None,win_ext=1,aux_ext=-
             wcs_time = date_obs_start
 
         if rotate:
-            x_interp = np.linspace(xmesh.min(), xmesh.max(), np.ceil(xmesh.ptp()/deltax).astype(int))
-            y_interp = np.linspace(ymesh.min(), ymesh.max(), np.ceil(ymesh.ptp()/deltay).astype(int))
+            x_interp = np.linspace(xmesh.min(), xmesh.max(), np.ceil(np.ptp(xmesh)/deltax).astype(int))
+            y_interp = np.linspace(ymesh.min(), ymesh.max(), np.ceil(np.ptp(ymesh)/deltay).astype(int))
 
             xi_interp = np.moveaxis(np.array(np.meshgrid(x_interp, y_interp)), 0, -1)
 
