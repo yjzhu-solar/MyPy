@@ -57,10 +57,10 @@ def rewrite_href(href: str, base_url: str, prefix: str = "") -> str:
     base_url: e.g. "https://user.github.io/repo"
     prefix  : e.g. "notes/2024"  (optional subdirectory on the site)
 
-    Returns : e.g. "https://user.github.io/repo/notes/2024/subdir/notebook.html#Section-1"
+    Returns : e.g. "https://user.github.io/repo/notes/2024/notebook.html#Section-1"
     """
     parsed = urlparse(href)
-    path = parsed.path                          # "subdir/notebook.ipynb"
+    path = parsed.path.rsplit("/", 1)[-1]      # "notebook.ipynb"
     fragment = parsed.fragment                  # "Section-1" or ""
 
     # .ipynb -> .html
