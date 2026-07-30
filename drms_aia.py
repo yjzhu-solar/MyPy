@@ -155,7 +155,6 @@ def construct_query_string(
     Construct a JSOC query string for downloading AIA data.
     """
 
-    print(start_time, end_time, duration, cadence, wavelength)
     time_str = time_to_input_string(start_time, end_time, duration, cadence)
 
     data_product_str, wavelength_str = parse_wavelength(wavelength)
