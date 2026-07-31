@@ -197,7 +197,87 @@ def query_and_download_aia_lev15(
         protocol: str = "fits"
     ):
     """
-    Query and download AIA level 1.5 data from JSOC.
+    Query and download SDO/AIA Level 1.5 data from JSOC.
+
+    This helper constructs the JSOC record query from time and wavelength
+    inputs, optionally applies a rectangular cutout in arcsec coordinates,
+    submits one or more export requests via DRMS, waits for completion, and
+    downloads all files into ``download_dir``.
+
+    Parameters
+    ----------
+    email : str
+        Email address required by JSOC export requests.
+    start_time : str or astropy.time.Time or datetime.datetime
+        Start time of the query.
+    wavelength : int, list[int], or str
+        AIA wavelength selector.
+        Supported integer channels are: 94, 131, 171, 193, 211, 304, 335,
+        1600, and 1700.
+        Supported string groups are: ``"euv"``, ``"uv"``, and ``"all"``.
+    end_time : str or astropy.time.Time or datetime.datetime, optional
+        End time of the query. Mutually exclusive with ``duration``.
+    duration : astropy.units.Quantity or datetime.timedelta, optional
+        Time span from ``start_time``. Mutually exclusive with ``end_time``.
+    cadence : astropy.units.Quantity or datetime.timedelta, optional
+        Sampling cadence for the query (for example, ``1*u.minute``).
+        Requires either ``end_time`` or ``duration``.
+    cutout_bottom_left : astropy.units.Quantity, optional
+        Bottom-left cutout coordinate ``[x, y]`` in arcsec.
+    cutout_top_right : astropy.units.Quantity, optional
+        Top-right cutout coordinate ``[x, y]`` in arcsec.
+    mpo : bool, default=True
+        If True, include master pointing correction
+        (``aia.master_pointing3h``) in the processing options.
+        By default, ``aia_prep`` in SolarSoft updates the pointing information
+        using the latest JSOC MPO data series ``aia.master_pointing3h``. 
+        If you want to use the pointing information of the original level 1 header, set ``mpo=False``.
+    download_dir : str or pathlib.Path, default="."
+        Output directory for downloaded FITS files.
+    method : str, default="url"
+        DRMS export method passed to ``drms.Client.export``.
+        Supported values are ``"url"``, ``"url-tar"``, ``"ftp"``,
+        ``"ftp-tar"``, ``"url_direct"``, and ``"url_quick"``. 
+    protocol : str, default="fits"
+        Export protocol passed to ``drms.Client.export``.
+        Supported values are ``"as-is"``, ``"FITS"``, ``"JPEG"``, ``"MPEG"``, and ``"MP4"``.
+
+    Examples
+    --------
+    Download one EUV channel for 30 minutes at 1-minute cadence:
+
+    >>> import astropy.units as u
+    >>> query_and_download_aia_lev15(
+    ...     email="you@example.com",
+    ...     start_time="2024-01-01T00:00:00",
+    ...     duration=30*u.minute,
+    ...     cadence=1*u.minute,
+    ...     wavelength=171,
+    ...     download_dir="~/Downloads/aia_171"
+    ... )
+
+    Download mixed EUV+UV channels with a spatial cutout:
+
+    >>> import astropy.units as u
+    >>> query_and_download_aia_lev15(
+    ...     email="you@example.com",
+    ...     start_time="2024-01-01T00:00:00",
+    ...     end_time="2024-01-01T00:20:00",
+    ...     wavelength=[171, 1600],
+    ...     cutout_bottom_left=u.Quantity([-500, -500], u.arcsec),
+    ...     cutout_top_right=u.Quantity([500, 500], u.arcsec),
+    ...     download_dir="~/Downloads/aia_cutout"
+    ... )
+
+    Download all standard AIA channels without cutout:
+
+    >>> query_and_download_aia_lev15(
+    ...     email="you@example.com",
+    ...     start_time="2024-01-01T00:00:00",
+    ...     duration=1*u.hour,
+    ...     wavelength="all",
+    ...     download_dir="~/Downloads/aia_all_channels"
+    ... )
     """
 
     query_string = construct_query_string(
