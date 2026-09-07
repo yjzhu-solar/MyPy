@@ -11,6 +11,32 @@ from IPython.display import HTML, display
 # from mpl_animators import ArrayAnimatorWCS
 
 
+#: Backends that cannot open a window at all, so there is nothing to show.
+_NON_GUI_BACKENDS = frozenset({'agg', 'cairo', 'pdf', 'pgf', 'ps', 'svg', 'template'})
+
+#: Notebook backends, which get the HTML animation rather than a window.
+_NOTEBOOK_BACKENDS = ('inline', 'nbagg', 'ipympl', 'widget')
+
+
+def _backend_can_show():
+    """
+    Whether the active matplotlib backend can open a figure window.
+
+    Testing for one hard-coded backend name ('qtagg') missed every other GUI
+    backend -- macosx, tkagg, gtk4agg, and even the 'QtAgg' spelling, since the
+    comparison was case-sensitive -- and silently closed the figure instead of
+    showing it.
+
+    Returns
+    -------
+    bool
+    """
+    backend = matplotlib.get_backend().lower()
+    if backend in _NON_GUI_BACKENDS:
+        return False
+    return not any(nb in backend for nb in _NOTEBOOK_BACKENDS)
+
+
 class SunBlinker():
     def __init__(self, map1, map2, reproject=False, fps=5, figsize=(5,5),
                  norm1=None, norm2=None, save_fname=None) -> None:
@@ -42,7 +68,7 @@ class SunBlinker():
         if save_fname is not None:
             self.anim.save(save_fname, writer='imagemagick', fps=self.fps)
 
-        if matplotlib.get_backend() == 'qtagg':
+        if _backend_can_show():
             plt.show()
         else:
             self.fig.clf()
@@ -112,7 +138,7 @@ class ImageBlinker():
         if save_fname is not None:
             self.anim.save(save_fname, writer='imagemagick', fps=self.fps)
 
-        if matplotlib.get_backend() == 'qtagg':
+        if _backend_can_show():
             plt.show()
         else:
             self.fig.clf()
