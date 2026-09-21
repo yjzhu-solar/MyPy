@@ -45,9 +45,12 @@ Reuse the synthetic raster from an earlier run instead of rebuilding it. The
         -sf /data/eui/eui_syn_raster_image_for_spice.npz
 
 Blink the synthetic raster against the corrected SPICE map to eyeball the fit.
-Blocks until the window is closed::
+Blocks until the window is closed. The frame titles are built from the data
+(EUI channel, fitted roll, SPICE window), or can be set explicitly::
 
     python euispice_coalign.py spice.fits /data/eui/ -p
+    python euispice_coalign.py spice.fits /data/eui/ -p \
+        -t1 'EUI 174 synthetic' -t2 'SPICE Ne VIII'
 
 Treat the raster as instantaneous, i.e. one observer position and one time for
 the whole scan. Faster, and a useful check on how much the per-column
@@ -334,6 +337,8 @@ class _EUIFrameSet:
     rsun_ref : `astropy.units.Quantity`
         ``RSUN_REF`` of the first frame, used as the ``rsun`` of the
         helioprojective frames built against these images.
+    label : str
+        Channel(s) in the set, e.g. ``'EUI/FSI 174'``, for plot titles.
     """
 
     def __init__(self, eui_files, max_cached=4):
@@ -347,6 +352,8 @@ class _EUIFrameSet:
         # exposure).
         self.time_obs = Time([h.get('DATE-AVG', h['DATE-OBS']) for h in headers])
         self.rsun_ref = headers[0]['RSUN_REF'] * u.m
+        channels = sorted({f"{h.get('DETECTOR', '?')} {h.get('WAVELNTH', '?')}" for h in headers})
+        self.label = 'EUI/' + ' + '.join(channels)
         self._max_cached = max(1, int(max_cached))
         self._cache = OrderedDict()
 
@@ -439,10 +446,11 @@ def create_syn_rasters(spice_file, eui_files, spice_window,
 
     if save_filename is not None:
         # Store the angles alongside the images so a cached file can never be
-        # paired with a different trial grid.
+        # paired with a different trial grid; the channel label is for titles.
         np.savez_compressed(save_filename,
                             eui_syn_raster_images=eui_syn_raster_images,
-                            rot_angles=rot_angles)
+                            rot_angles=rot_angles,
+                            eui_label=eui_frames.label)
 
     return eui_syn_raster_images
 
@@ -531,7 +539,7 @@ def make_single_syn_raster(spice_wcs, shape, spice_time_obs, solar_orbiter_loc,
 
 def calculate_eui_spice_shift(spice_file, spice_window, eui_syn_raster_images,
                               rotation=True, cdelt1_multiplier=1, save_filename=None,
-                              output_dir=None, plot=False):
+                              output_dir=None, plot=False, title_1=None, title_2=None):
     """
     Fit the SPICE pointing offset against a synthetic EUI raster.
 
@@ -558,6 +566,11 @@ def calculate_eui_spice_shift(spice_file, spice_window, eui_syn_raster_images,
     plot : bool, optional
         Show a blink comparison of the synthetic raster against the corrected
         SPICE intensity map. Blocks until the window is closed.
+    title_1, title_2 : str, optional
+        Titles for the synthetic-raster and SPICE frames of the blink
+        comparison. By default they are built from the data: the EUI channel
+        (known only when ``eui_syn_raster_images`` is a ``.npz`` path, else
+        just 'EUI') and fitted roll, and the SPICE window name.
 
     Returns
     -------
@@ -573,10 +586,13 @@ def calculate_eui_spice_shift(spice_file, spice_window, eui_syn_raster_images,
     spice_wcs = _prepare_spice_wcs(spice_window, cdelt1_multiplier)
 
     rot_angles = None
+    eui_label = 'EUI'
     if isinstance(eui_syn_raster_images, (str, Path)):
         with np.load(eui_syn_raster_images) as npz:
             if 'rot_angles' in npz.files:
                 rot_angles = npz['rot_angles']
+            if 'eui_label' in npz.files:
+                eui_label = str(npz['eui_label'])
             eui_syn_raster_images = npz['eui_syn_raster_images']
     if rot_angles is None:
         rot_angles = _trial_roll_angles(rotation)
@@ -653,7 +669,15 @@ def calculate_eui_spice_shift(spice_file, spice_window, eui_syn_raster_images,
             eui_syn_raster_map.scale.axis2 / eui_syn_raster_map.scale.axis1
         for key in ('CROTA1', 'CROTA2', 'CD1_1', 'CD1_2', 'CD2_1', 'CD2_2'):
             spice_int_map.meta.pop(key, None)
+        if title_1 is None:
+            title_1 = f'{eui_label} synthetic raster'
+            if len(rot_angles) > 1:
+                title_1 += f'\nroll {np.rad2deg(rot_angle_optimal):+.2f}\N{DEGREE SIGN}'
+        if title_2 is None:
+            window_name = spice_window.meta.get('EXTNAME', 'SPICE window')
+            title_2 = f'SPICE {window_name}\nco-aligned'
         SunBlinker(eui_syn_raster_map, spice_int_map, reproject=True, fps=1,
+                   title_1=title_1, title_2=title_2,
                    norm1=ImageNormalize(vmin=np.nanpercentile(eui_syn_raster_best, 0.2),
                                         vmax=np.nanpercentile(eui_syn_raster_best, 99.8),
                                         stretch=AsinhStretch(0.1)),
@@ -891,6 +915,10 @@ if __name__ == '__main__':
     parser.add_argument('-c1', '--cdelt1', type=float, default=1, help='CDELT1 multiplier')
     parser.add_argument('-p', '--plot', action='store_true',
                         help='Show a blink comparison after saving')
+    parser.add_argument('-t1', '--title_1', type=str, default=None,
+                        help='Title of the EUI frame in the blink comparison')
+    parser.add_argument('-t2', '--title_2', type=str, default=None,
+                        help='Title of the SPICE frame in the blink comparison')
 
     args = parser.parse_args()
 
@@ -915,6 +943,7 @@ if __name__ == '__main__':
         calculate_eui_spice_shift(args.spice_file, args.spice_window, eui_syn_raster_images,
                                   rotation=args.rotation, cdelt1_multiplier=args.cdelt1,
                                   save_filename=args.save_filename,
-                                  output_dir=args.output_dir, plot=args.plot)
+                                  output_dir=args.output_dir, plot=args.plot,
+                                  title_1=args.title_1, title_2=args.title_2)
 
     print(xshift_optimal, yshift_optimal, rot_matrix_optimal, rot_angle_optimal)

@@ -39,8 +39,11 @@ def _backend_can_show():
 
 class SunBlinker():
     def __init__(self, map1, map2, reproject=False, fps=5, figsize=(5,5),
-                 norm1=None, norm2=None, save_fname=None) -> None:
+                 norm1=None, norm2=None, save_fname=None,
+                 title_1=None, title_2=None) -> None:
         self.map1 = map1
+        self.title_1 = '' if title_1 is None else title_1
+        self.title_2 = '' if title_2 is None else title_2
         if reproject:
             self.map2 = map2.reproject_to(map1.wcs)
         else:
@@ -60,7 +63,10 @@ class SunBlinker():
 
         self._init_plot()
 
-        self.anim = FuncAnimation(self.fig, self._update_plot, interval=1000/self.fps, blit=True,frames=2,
+        # No blitting: the title lies outside ax.bbox, which is the only region a
+        # blitted GUI window repaints, so the alternating title would never show.
+        # A full redraw per frame is cheap for a two-frame blink.
+        self.anim = FuncAnimation(self.fig, self._update_plot, interval=1000/self.fps, blit=False,frames=2,
                                   repeat=True)
         
         self.anim_html = HTML(self.anim.to_jshtml())
@@ -84,7 +90,7 @@ class SunBlinker():
         if 'aspect' in self.map1.plot_settings.keys():
             self.ax.set_aspect(self.map1.plot_settings['aspect'])
         self.im = self.map1.plot(axes=self.ax)
-        self.ax.set_title(None)
+        self.ax.set_title(self.title_1)
 
     def _update_plot(self,i):
         # self.ax.clear()   
@@ -92,20 +98,24 @@ class SunBlinker():
             self.im.set_array(self.map1.data)
             self.im.set_norm(self.norm1)
             self.im.set_cmap(self.map1.plot_settings['cmap'])
+            self.ax.title.set_text(self.title_1)
         else:
             self.im.set_array(self.map2.data)
             self.im.set_norm(self.norm2)
             self.im.set_cmap(self.map2.plot_settings['cmap'])
+            self.ax.title.set_text(self.title_2)
         
-        return [self.im]
+        return [self.im, self.ax.title]
     
 
 class ImageBlinker():
     def __init__(self, image1, image2, fps=5, figsize=(5,5),
                  norm1=None, norm2=None, aspect=1,
                  save_fname=None, cmap1=None,
-                 cmap2=None,**kwargs) -> None:
+                 cmap2=None, title_1=None, title_2=None, **kwargs) -> None:
         self.image1 = image1
+        self.title_1 = '' if title_1 is None else title_1
+        self.title_2 = '' if title_2 is None else title_2
         self.image2 = image2
         self.cmap1 = cmap1
         self.cmap2 = cmap2
@@ -130,7 +140,10 @@ class ImageBlinker():
         
         self._init_plot()
 
-        self.anim = FuncAnimation(self.fig, self._update_plot, interval=1000/self.fps, blit=True,frames=2,
+        # No blitting: the title lies outside ax.bbox, which is the only region a
+        # blitted GUI window repaints, so the alternating title would never show.
+        # A full redraw per frame is cheap for a two-frame blink.
+        self.anim = FuncAnimation(self.fig, self._update_plot, interval=1000/self.fps, blit=False,frames=2,
                                   repeat=True)
         
         self.anim_html = HTML(self.anim.to_jshtml())
@@ -152,6 +165,7 @@ class ImageBlinker():
         self.ax = self.fig.add_subplot(111)
         self.im = self.ax.imshow(self.image1, norm=self.norm1, origin='lower',
                                  aspect=self.aspect, cmap=self.cmap1, **self.kwargs)
+        self.ax.set_title(self.title_1)
 
     def _update_plot(self,i):
         # self.ax.clear()   
@@ -160,13 +174,15 @@ class ImageBlinker():
             self.im.set_norm(self.norm1)
             if self.cmap1 is not None:
                 self.im.set_cmap(self.cmap1)
+            self.ax.title.set_text(self.title_1)
         else:
             self.im.set_array(self.image2)
             self.im.set_norm(self.norm2)
             if self.cmap2 is not None:
                 self.im.set_cmap(self.cmap2)
+            self.ax.title.set_text(self.title_2)
         
-        return [self.im]
+        return [self.im, self.ax.title]
 
 
 
