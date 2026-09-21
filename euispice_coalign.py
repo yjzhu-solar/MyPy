@@ -539,7 +539,7 @@ def make_single_syn_raster(spice_wcs, shape, spice_time_obs, solar_orbiter_loc,
 
 def calculate_eui_spice_shift(spice_file, spice_window, eui_syn_raster_images,
                               rotation=True, cdelt1_multiplier=1, save_filename=None,
-                              output_dir=None, plot=False, title_1=None, title_2=None):
+                              output_dir=None, plot=False, title1=None, title2=None):
     """
     Fit the SPICE pointing offset against a synthetic EUI raster.
 
@@ -566,7 +566,7 @@ def calculate_eui_spice_shift(spice_file, spice_window, eui_syn_raster_images,
     plot : bool, optional
         Show a blink comparison of the synthetic raster against the corrected
         SPICE intensity map. Blocks until the window is closed.
-    title_1, title_2 : str, optional
+    title1, title2 : str, optional
         Titles for the synthetic-raster and SPICE frames of the blink
         comparison. By default they are built from the data: the EUI channel
         (known only when ``eui_syn_raster_images`` is a ``.npz`` path, else
@@ -669,15 +669,15 @@ def calculate_eui_spice_shift(spice_file, spice_window, eui_syn_raster_images,
             eui_syn_raster_map.scale.axis2 / eui_syn_raster_map.scale.axis1
         for key in ('CROTA1', 'CROTA2', 'CD1_1', 'CD1_2', 'CD2_1', 'CD2_2'):
             spice_int_map.meta.pop(key, None)
-        if title_1 is None:
-            title_1 = f'{eui_label} synthetic raster'
+        if title1 is None:
+            title1 = f'{eui_label} synthetic raster'
             if len(rot_angles) > 1:
-                title_1 += f'\nroll {np.rad2deg(rot_angle_optimal):+.2f}\N{DEGREE SIGN}'
-        if title_2 is None:
+                title1 += f'\nroll {np.rad2deg(rot_angle_optimal):+.2f}\N{DEGREE SIGN}'
+        if title2 is None:
             window_name = spice_window.meta.get('EXTNAME', 'SPICE window')
-            title_2 = f'SPICE {window_name}\nco-aligned'
+            title2 = f'SPICE {window_name}\nco-aligned'
         SunBlinker(eui_syn_raster_map, spice_int_map, reproject=True, fps=1,
-                   title_1=title_1, title_2=title_2,
+                   title1=title1, title2=title2,
                    norm1=ImageNormalize(vmin=np.nanpercentile(eui_syn_raster_best, 0.2),
                                         vmax=np.nanpercentile(eui_syn_raster_best, 99.8),
                                         stretch=AsinhStretch(0.1)),
@@ -915,9 +915,9 @@ if __name__ == '__main__':
     parser.add_argument('-c1', '--cdelt1', type=float, default=1, help='CDELT1 multiplier')
     parser.add_argument('-p', '--plot', action='store_true',
                         help='Show a blink comparison after saving')
-    parser.add_argument('-t1', '--title_1', type=str, default=None,
+    parser.add_argument('-t1', '--title1', type=str, default=None,
                         help='Title of the EUI frame in the blink comparison')
-    parser.add_argument('-t2', '--title_2', type=str, default=None,
+    parser.add_argument('-t2', '--title2', type=str, default=None,
                         help='Title of the SPICE frame in the blink comparison')
 
     args = parser.parse_args()
@@ -944,6 +944,6 @@ if __name__ == '__main__':
                                   rotation=args.rotation, cdelt1_multiplier=args.cdelt1,
                                   save_filename=args.save_filename,
                                   output_dir=args.output_dir, plot=args.plot,
-                                  title_1=args.title_1, title_2=args.title_2)
+                                  title1=args.title1, title2=args.title2)
 
     print(xshift_optimal, yshift_optimal, rot_matrix_optimal, rot_angle_optimal)
