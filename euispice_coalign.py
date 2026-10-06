@@ -504,6 +504,14 @@ def make_single_syn_raster(spice_wcs, shape, spice_time_obs, solar_orbiter_loc,
         # pixel_to_world above returns undistorted coordinates, and the DPDD
         # (SPICE-UIO-DPDD-0002 issue 2.2, p. 47) instructs Python users to add
         # element ii of each WCSDVARR array by hand, which is what happens here.
+        #
+        # Do not flip this to a minus sign. gpelouze/spice_jitter_correction
+        # subtracts WCSDVARR, but on real data that doubles the jitter rather
+        # than removing it: in solo_L2_spice-n-ras_20210914T025031_V24_67109159
+        # (the DPDD's own jitter example) the minus sign turns the ~+/-13"
+        # Solar Y wobble at the right of the raster into a ~+/-25-30" zigzag,
+        # while the plus sign straightens it. The plus sign also correlates
+        # better with EUI on the 20221024T231535 V22 raster.
         obs_index = ii if solar_rotation else 0
         spice_skycoord = SkyCoord(
             spice_skycoord_rough[:, ii].Tx.to(u.arcsec) + spice_solarx_shift[ii] * u.arcsec,

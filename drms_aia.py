@@ -175,6 +175,8 @@ def construct_option_dict(
     ) -> dict:
     if cutout_bottom_left is None and cutout_top_right is None and mpo is False:
         return {None: None}
+    if cutout_bottom_left is None and cutout_top_right is None and mpo is True:
+        return {"mpt": "aia.master_pointing3h"}
     if cutout_bottom_left is not None and cutout_top_right is not None:
         cutout_dict = cutout_coords_dict(cutout_bottom_left, cutout_top_right)
         if mpo is True:
