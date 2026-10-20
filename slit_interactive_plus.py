@@ -1029,16 +1029,24 @@ class SpacetimeFit:
 
 def plot_slit_position(ax, slit, color='#58B2DC', curve_color='#FF6B6B', show_boundary=True,
                        show_curve=True, show_points=True, show_direction=True, direction_size=20,
-                       direction_ratio=0.6, label=None, alpha=0.9):
+                       direction_ratio=0.6, linewidth=1.0, curve_linewidth=1.5, alpha=0.9, label=None):
     """
     Draw a slit outline on an image axis (pixel coordinates; WCSAxes are fine).
 
     Parameters
     ----------
     slit : SlitGeometry or SlitResult
-    color, curve_color : colours of the outline and of the centre line and control points
-    show_direction : bool
-        Draw a triangle on the outline pointing in the direction of increasing distance.
+        A SlitGeometry is enough: no data cube is needed to plot where a slit is.
+    color : outline and direction-triangle colour
+    curve_color : centre line and control-point colour
+    show_boundary, show_curve, show_points, show_direction : which parts to draw
+    direction_size : float
+        Length of the triangle's base along the slit edge, in pixels. It starts a quarter of
+        the way along the slit, or earlier if the slit is too short for that.
+    direction_ratio : float
+        Triangle height relative to its base.
+    linewidth, curve_linewidth : widths of the outline and of the centre line
+    alpha : opacity of everything drawn
     label : str, optional
         Text placed next to the direction triangle.
 
@@ -1050,22 +1058,25 @@ def plot_slit_position(ax, slit, color='#58B2DC', curve_color='#FF6B6B', show_bo
     artists = dict(boundary=None, curve=None, points=None, triangle=None, text=None)
     if show_boundary:
         bx, by = g.boundary()
-        artists['boundary'] = ax.plot(bx, by, color=color, lw=1, alpha=0.8)[0]
+        artists['boundary'] = ax.plot(bx, by, color=color, lw=linewidth, alpha=alpha)[0]
     if show_curve:
-        artists['curve'] = ax.plot(g.centre_x, g.centre_y, color=curve_color, lw=1.5, alpha=alpha)[0]
+        artists['curve'] = ax.plot(g.centre_x, g.centre_y, color=curve_color, lw=curve_linewidth,
+                                   alpha=alpha)[0]
     if show_points:
         artists['points'] = ax.plot(g.control_x, g.control_y, 'o', ms=6, mfc=curve_color, mec='white',
                                     mew=1.5, ls='none', alpha=alpha)[0]
     if show_direction and g.n_dist > 2:
-        i0 = min(g.n_dist // 4, g.n_dist - 2)
-        i1 = int(np.argmin(np.abs(g.arc_length - (g.arc_length[i0] + direction_size))))
+        s = g.arc_length
+        fits_until = int(np.searchsorted(s, s[-1] - direction_size, side='right')) - 1
+        i0 = int(np.clip(min(g.n_dist // 4, fits_until), 0, g.n_dist - 2))
+        i1 = int(np.argmin(np.abs(s - (s[i0] + direction_size))))
         i1 = max(i1, i0 + 1)
         p0 = np.array([g.x[i0, 0], g.y[i0, 0]])
         p1 = np.array([g.x[i1, 0], g.y[i1, 0]])
         base = p1 - p0
         apex = p0 + np.array([base[1], -base[0]]) * direction_ratio
         artists['triangle'] = ax.add_patch(Polygon(np.vstack([p0, p1, apex]), closed=True, color=color,
-                                                   alpha=0.8))
+                                                   alpha=alpha))
         if label is not None:
             normal = np.array([base[1], -base[0]]) / max(np.hypot(*base), 1e-9)
             pos = (p0 + p1) / 2 + normal * (direction_ratio * np.hypot(*base) + 5)

@@ -348,6 +348,22 @@ def test_to_ndcube():
     assert cube.unit == u.DN / u.s
 
 
+def test_plot_slit_position_from_geometry_only():
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    g = sip.SlitGeometry([100, 500], [100, 300], line_width=40)        # no data cube needed
+    art = sip.plot_slit_position(ax, g, color='#7DB9DE', show_points=False, show_curve=False,
+                                 direction_size=100, direction_ratio=0.6, linewidth=1.5, alpha=1.0)
+    assert art['curve'] is None and art['points'] is None
+    assert art['boundary'].get_linewidth() == 1.5 and art['triangle'].get_alpha() == 1.0
+    base = np.diff(art['triangle'].get_xy()[:2], axis=0)[0]
+    assert abs(np.hypot(*base) - 100) < 1.0
+    short = sip.SlitGeometry([0, 50], [0, 0], line_width=4)              # shorter than the triangle
+    tri = sip.plot_slit_position(ax, short, direction_size=100)['triangle'].get_xy()
+    assert tri[:2, 0].min() >= -1e-9 and tri[:2, 0].max() <= 50 + 1e-9
+    plt.close(fig)
+
+
 # ----------------------------------------------------------------------------- preview
 def test_preview_grid(tmp_path):
     cube = _cube(ny=50, nx=60, nt=8)
