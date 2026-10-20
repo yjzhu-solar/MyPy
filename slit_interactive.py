@@ -42,8 +42,6 @@ Dependencies:
 - ndcube : N-dimensional data cubes
 - PyQt5 : GUI file dialogs
 
-Author: Solar Physics Analysis Team
-Last Updated: October 2025
 """
 
 import numpy as np
