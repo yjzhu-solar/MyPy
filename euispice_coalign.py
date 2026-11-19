@@ -110,6 +110,30 @@ Fit the translation only, and show the blink comparison::
 silently reporting the wrong roll. Passing a .npz makes that impossible, since
 the file carries its own angles.
 
+Merged slot rasters
+-------------------
+Files written by ``spice_slot_merge.py`` (30 arcsec slot rasters merged into
+one map per window, header ``SLOTMRG = T``) are recognised automatically.
+Each pixel is sampled in the EUI frame closest to the time of its own raster
+step, with differential rotation to that frame, and EUI is blurred to the
+SPICE resolution (``--no-blur`` to disable). ``-w`` and ``-c1`` do not apply;
+the raster step is corrected when merging::
+
+    python euispice_coalign.py merged_NeVIII770_slotmerge.fits '/data/fsi174/*.fits' -p
+
+In Python, many files of one window can share one cached EUI frame set::
+
+    from euispice_coalign import coalign_slot_files, fit_slot_step_scale
+    table = coalign_slot_files(sorted(glob('merged/*_CIII977_slotmerge.fits')),
+                               sorted(glob('/data/fsi304/*.fits')),
+                               output_dir='coaligned')
+
+and the raster-step multiplier can be measured from the agreement of the two
+halves of a raster::
+
+    best, table = fit_slot_step_scale(l2_file, 'C III 977', response,
+                                      eui_files=sorted(glob('/data/fsi304/*.fits')))
+
 Notes
 -----
 As a rough guide, a 192 x 832 raster against 35 EUI FSI frames takes about
@@ -132,8 +156,10 @@ from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.time import Time
 from astropy.visualization import ImageNormalize, AsinhStretch
+from astropy.wcs import WCS
 import matplotlib.pyplot as plt
 from scipy.interpolate import RegularGridInterpolator
+from scipy.ndimage import gaussian_filter
 from skimage.feature import match_template
 from skimage.registration import phase_cross_correlation
 import sunpy.map
@@ -329,6 +355,11 @@ class _EUIFrameSet:
     max_cached : int, optional
         Number of decoded frames to keep. Set to ``len(eui_files)`` to hold the
         whole sequence in memory and never re-read a file.
+    blur : (float, float), optional
+        Gaussian sigma in arcsec along the image x and y axes, applied to each
+        frame (NaN-aware) before its interpolator is built, to bring EUI to
+        the resolution of the SPICE data it is compared with. ``None`` (the
+        default) leaves the frames untouched.
 
     Attributes
     ----------
@@ -339,9 +370,11 @@ class _EUIFrameSet:
         helioprojective frames built against these images.
     label : str
         Channel(s) in the set, e.g. ``'EUI/FSI 174'``, for plot titles.
+    pixel_scale : float
+        ``CDELT1`` of the first frame in arcsec.
     """
 
-    def __init__(self, eui_files, max_cached=4):
+    def __init__(self, eui_files, max_cached=4, blur=None):
         self.files = list(eui_files)
         if not self.files:
             raise ValueError('no EUI files supplied')
@@ -354,6 +387,9 @@ class _EUIFrameSet:
         self.rsun_ref = headers[0]['RSUN_REF'] * u.m
         channels = sorted({f"{h.get('DETECTOR', '?')} {h.get('WAVELNTH', '?')}" for h in headers})
         self.label = 'EUI/' + ' + '.join(channels)
+        self.pixel_scale = abs(headers[0]['CDELT1']) * u.Unit(headers[0].get('CUNIT1', 'arcsec')
+                                                              ).to(u.arcsec)
+        self.blur = None if blur is None else tuple(float(b) for b in blur)
         self._max_cached = max(1, int(max_cached))
         self._cache = OrderedDict()
 
@@ -372,9 +408,14 @@ class _EUIFrameSet:
             self._cache.move_to_end(index)
             return self._cache[index]
         eui_map = sunpy.map.Map(self.files[index])
+        data = eui_map.data
+        if self.blur is not None and max(self.blur) > 0:
+            scale = (eui_map.scale.axis1.to_value(u.arcsec / u.pix),
+                     eui_map.scale.axis2.to_value(u.arcsec / u.pix))
+            data = _nan_gaussian(data, (self.blur[1] / scale[1], self.blur[0] / scale[0]))
         interpolator = RegularGridInterpolator(
-            (np.arange(eui_map.data.shape[0]), np.arange(eui_map.data.shape[1])),
-            eui_map.data, bounds_error=False, method='linear')
+            (np.arange(data.shape[0]), np.arange(data.shape[1])),
+            data, bounds_error=False, method='linear')
         self._cache[index] = (eui_map, interpolator)
         while len(self._cache) > self._max_cached:
             self._cache.popitem(last=False)
@@ -903,6 +944,569 @@ def coalign_shift_pixel_new(map1, map2):
     return xshift, yshift, -np.sqrt(np.sum(error ** 2))
 
 
+# ---------------------------------------------------------------------------
+# Merged slot rasters (output of spice_slot_merge.py)
+# ---------------------------------------------------------------------------
+
+def _nan_gaussian(data, sigma):
+    """
+    Gaussian filter that ignores NaN (normalised convolution); NaN where less
+    than half of the kernel weight had data. ``sigma`` is (rows, cols) in pixels.
+    """
+    finite = np.isfinite(data)
+    num = gaussian_filter(np.where(finite, data, 0.0).astype(float), sigma, mode='constant')
+    den = gaussian_filter(finite.astype(float), sigma, mode='constant')
+    with np.errstate(invalid='ignore', divide='ignore'):
+        return np.where(den > 0.5, num / den, np.nan)
+
+
+def is_slot_merged(filename):
+    """True if ``filename`` is a merged slot raster written by spice_slot_merge."""
+    return bool(fits.getheader(filename, 0).get('SLOTMRG', False))
+
+
+def slot_blur(slot_header, eui_pixel_scale, psf_pixels=0.85):
+    """
+    Gaussian sigma (arcsec, along the raster and slit axes) that brings an EUI
+    image to the resolution of a merged slot raster.
+
+    The merged map is blurred along the raster axis by the line profile and
+    PSF (``SLOTSGX``, the sigma of the fitted slot edges) and along the slit
+    by the PSF (``SLOTSGY``). EUI's own blur, taken as ``psf_pixels`` EUI
+    pixels (FWHM ~2 pixels), is subtracted in quadrature. For FSI this is
+    ~0; for HRIEUV it is nearly the full SPICE blur.
+    """
+    sigma_eui = psf_pixels * eui_pixel_scale
+    return tuple(float(np.sqrt(max(slot_header.get(key, 0.0) ** 2 - sigma_eui ** 2, 0.0)))
+                 for key in ('SLOTSGX', 'SLOTSGY'))
+
+
+def _slot_step_map(hdul):
+    """
+    Index of the raster step each pixel of a merged slot raster belongs to
+    (the step closest in time to the pixel's TIME value), and the step times.
+
+    Pixels without coverage take the time of their column, or of the nearest
+    column with coverage, so the synthetic image is defined everywhere.
+    """
+    header = hdul[0].header
+    tmap = np.asarray(hdul['TIME'].data, dtype=float)
+    steps = hdul['STEPS'].data
+    step_dt = np.asarray(steps['TIME'], dtype=float)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        col = np.nanmedian(tmap, axis=0)
+    ok = np.isfinite(col)
+    if not ok.any():
+        raise ValueError('TIME extension has no finite values')
+    cols = np.arange(col.size)
+    col = np.interp(cols, cols[ok], col[ok])
+    tfilled = np.where(np.isfinite(tmap), tmap, col[None, :])
+    index = np.argmin(np.abs(tfilled[..., None] - step_dt[None, None, :]), axis=-1)
+    t_ref = Time(hdul['TIME'].header.get('DATEREF', header['DATE-BEG']))
+    return index, t_ref + step_dt * u.s
+
+
+def _open_slot(slot):
+    """Return an open HDUList for a merged slot raster given as a path or HDUList."""
+    return slot if isinstance(slot, fits.HDUList) else fits.open(slot)
+
+
+def _world_to_eui_pixel(eui_map, lon, lat, obstime, observer, rsun):
+    """
+    EUI pixel coordinates of helioprojective (lon, lat) in degrees, observed
+    at ``obstime`` from ``observer``, rotated with the solar surface to the
+    time of ``eui_map``.
+    """
+    coords = SkyCoord(lon * u.deg, lat * u.deg, frame='helioprojective', obstime=obstime,
+                      observer=observer, rsun=rsun)
+    with propagate_with_solar_surface(rotation_model='rigid'):
+        return eui_map.wcs.world_to_pixel(coords)
+
+
+class _SmoothPixelMap:
+    """
+    Interpolation of `_world_to_eui_pixel` from a coarse grid.
+
+    Within a SPICE field of view the mapping (two TAN projections plus a few
+    minutes of rigid rotation) is nearly linear -- second differences across a
+    16 x 40 grid are ~1e-5 pixel -- so it is evaluated exactly on a ``n_lon`` x
+    ``n_lat`` grid and interpolated bilinearly (~1e-5 pixel error). Do not
+    switch to ``method='cubic'``: scipy fits that spline with an iterative
+    solver whose default tolerance leaves ~0.04 pixel errors on values of
+    ~1000 pixels, even at the nodes. The interpolation is checked at the cell
+    centres; `ok` is False if it is worse than ``tolerance`` pixels or the grid
+    has non-finite values (e.g. off-disk points), and the caller should then
+    use the exact path.
+    """
+
+    def __init__(self, eui_map, lon_range, lat_range, obstime, observer, rsun,
+                 n_lon=16, n_lat=40, tolerance=0.01):
+        lon = np.linspace(*lon_range, n_lon)
+        lat = np.linspace(*lat_range, n_lat)
+        glat, glon = np.meshgrid(lat, lon, indexing='ij')
+        px, py = _world_to_eui_pixel(eui_map, glon, glat, obstime, observer, rsun)
+        self.ok = bool(np.all(np.isfinite(px)) and np.all(np.isfinite(py)))
+        if not self.ok:
+            return
+        self._px = RegularGridInterpolator((lat, lon), px, method='linear')
+        self._py = RegularGridInterpolator((lat, lon), py, method='linear')
+        # Check halfway between grid nodes, where interpolation is worst
+        clat, clon = np.meshgrid(0.5 * (lat[1:] + lat[:-1]), 0.5 * (lon[1:] + lon[:-1]),
+                                 indexing='ij')
+        ex, ey = _world_to_eui_pixel(eui_map, clon, clat, obstime, observer, rsun)
+        ix, iy = self(clon, clat)
+        self.max_error = float(np.nanmax(np.hypot(ix - ex, iy - ey)))
+        self.ok = self.max_error <= tolerance
+
+    def __call__(self, lon, lat):
+        points = (lat, lon)
+        return self._px(points), self._py(points)
+
+
+def create_syn_slot_images(slot_file, eui_files, rotation=True, solar_rotation=True,
+                           blur='auto', save_filename=None, eui_frames=None, roll_angles=None,
+                           fast=True):
+    """
+    Synthetic EUI images on the grid of a merged slot raster.
+
+    Every pixel of the merged map is assigned the raster step it was observed
+    in (from the ``TIME`` extension) and sampled in the EUI frame closest in
+    time to that step, after differential rotation from the step time to the
+    frame time -- the slot counterpart of `create_syn_rasters`, with one
+    group of pixels per raster step instead of one column.
+
+    Parameters
+    ----------
+    slot_file : str, `pathlib.Path` or `astropy.io.fits.HDUList`
+        Merged slot raster (``SLOTMRG = T``).
+    eui_files : list of str
+        EUI L2 images around the raster time. Ignored if ``eui_frames`` given.
+    rotation : bool, optional
+        One image per angle in `TRIAL_ROLL_ANGLES` (True) or the nominal roll.
+    roll_angles : array-like, optional
+        Trial roll angles in radians, overriding ``rotation``.
+    solar_rotation : bool, optional
+        If False, every pixel uses the raster midpoint ``DATE-AVG``.
+    blur : 'auto', (float, float) or None, optional
+        Gaussian sigma (arcsec, x and y) applied to the EUI frames; 'auto'
+        uses `slot_blur`. Ignored if ``eui_frames`` is given.
+    save_filename : str, optional
+        Save the images, angles and EUI label to this .npz.
+    eui_frames : `_EUIFrameSet`, optional
+        Reuse a frame set (and its cache) across many slot files.
+    fast : bool, optional
+        Evaluate the sky-to-EUI-pixel transform exactly on a coarse grid per
+        raster step and interpolate it (`_SmoothPixelMap`, checked to 0.01
+        pixel) instead of transforming every pixel for every trial angle.
+        ~4x faster for 21 angles, same result to ~1e-6 of the image range;
+        falls back to the exact path if the check fails.
+
+    Returns
+    -------
+    `numpy.ndarray`
+        ``(n_angles, ny, nx)``; NaN where the EUI frames do not reach.
+    """
+    hdul = _open_slot(slot_file)
+    header = hdul[0].header.copy()
+    shape = hdul[0].data.shape
+    step_index, step_times = _slot_step_map(hdul)
+    if hdul is not slot_file:
+        hdul.close()
+    if eui_frames is None:
+        if blur == 'auto':
+            probe = fits.getheader(eui_files[0], ext=1)
+            scale = abs(probe['CDELT1']) * u.Unit(probe.get('CUNIT1', 'arcsec')).to(u.arcsec)
+            blur = slot_blur(header, scale)
+        eui_frames = _EUIFrameSet(eui_files, blur=blur)
+    if not solar_rotation:
+        step_index = np.zeros(shape, dtype=int)
+        step_times = Time([header['DATE-AVG']])
+
+    wcs = WCS(header).celestial
+    # Observer position from the header (Solar Orbiter moves < 0.002 deg in
+    # Stonyhurst longitude during a slot raster). It is re-stamped with each
+    # step's time below: propagate_with_solar_surface rotates from the
+    # *observer's* obstime, not the frame's, so an observer fixed at DATE-AVG
+    # would rotate every step as if it had been observed at DATE-AVG.
+    observer = sunpy.map.Map(np.zeros((2, 2)), header).observer_coordinate
+    yy, xx = np.indices(shape)
+    rot_angles = _trial_roll_angles(rotation) if roll_angles is None \
+        else np.atleast_1d(np.asarray(roll_angles, dtype=float))
+    syn = np.full((len(rot_angles),) + shape, np.nan)
+    groups = [(g, step_index == g) for g in np.unique(step_index)]
+
+    # World coordinates of every pixel for every trial roll
+    world = []
+    for angle in rot_angles:
+        trial = deepcopy(wcs)
+        trial.wcs.pc = np.dot(wcs.wcs.pc, _roll_matrix(angle, wcs))
+        lon, lat = trial.pixel_to_world_values(xx, yy)
+        world.append(((lon + 180) % 360 - 180, lat))
+
+    for g, sel in groups:
+        observer_g = SkyCoord(observer.lon, observer.lat, observer.radius,
+                              frame='heliographic_stonyhurst', obstime=step_times[g])
+        eui_map, interpolator = eui_frames[find_closest_frame(step_times[g],
+                                                              eui_frames.time_obs)]
+        mapper = None
+        if fast:
+            lons = np.concatenate([w[0][sel] for w in world])
+            lats = np.concatenate([w[1][sel] for w in world])
+            pad = 2.0 / 3600
+            mapper = _SmoothPixelMap(eui_map, (lons.min() - pad, lons.max() + pad),
+                                     (lats.min() - pad, lats.max() + pad), step_times[g],
+                                     observer_g, eui_frames.rsun_ref)
+            if not mapper.ok:
+                mapper = None
+        for ia, (lon, lat) in enumerate(world):
+            if mapper is not None:
+                px, py = mapper(lon[sel], lat[sel])
+            else:
+                px, py = _world_to_eui_pixel(eui_map, lon[sel], lat[sel], step_times[g],
+                                             observer_g, eui_frames.rsun_ref)
+            syn[ia][sel] = interpolator((py, px))
+
+    if save_filename is not None:
+        np.savez_compressed(save_filename, eui_syn_raster_images=syn, rot_angles=rot_angles,
+                            eui_label=eui_frames.label, blur=np.asarray(eui_frames.blur or (0, 0)))
+    return syn
+
+
+def _finite_box(arr, max_bad=0.01, min_size=16):
+    """
+    Row and column slices of a box inside ``arr`` whose edge rows/columns are
+    at least ``1 - max_bad`` finite, found by repeatedly trimming the worst
+    edge. Remaining isolated NaN inside are left for the caller to fill.
+    """
+    bad = ~np.isfinite(arr)
+    r0, r1, c0, c1 = 0, arr.shape[0], 0, arr.shape[1]
+    while True:
+        sub = bad[r0:r1, c0:c1]
+        frac = {'r0': sub[0].mean(), 'r1': sub[-1].mean(),
+                'c0': sub[:, 0].mean(), 'c1': sub[:, -1].mean()}
+        side = max(frac, key=frac.get)
+        if frac[side] <= max_bad:
+            return slice(r0, r1), slice(c0, c1)
+        if side == 'r0':
+            r0 += 1
+        elif side == 'r1':
+            r1 -= 1
+        elif side == 'c0':
+            c0 += 1
+        else:
+            c1 -= 1
+        if r1 - r0 < min_size or c1 - c0 < min_size:
+            raise ValueError('no sufficiently large finite region')
+
+
+def _fill_nan(arr):
+    arr = np.array(arr, dtype=float)
+    arr[~np.isfinite(arr)] = np.nanmedian(arr)
+    return arr
+
+
+def calculate_eui_spice_slot_shift(slot_file, eui_syn_images, rotation=True, margin=0.25,
+                                   save_filename=None, output_dir=None, plot=False,
+                                   title1=None, title2=None, roll_angles=None):
+    """
+    Fit the pointing of a merged slot raster against synthetic EUI images and
+    write a co-aligned copy.
+
+    The central part of the merged map -- inside its finite region, inset by
+    ``margin`` of its size on each side, which sets the search range -- is
+    located in each synthetic image by normalised cross-correlation; the roll
+    with the highest peak wins. As in `calculate_eui_spice_shift`, the
+    correction is world(found) - world(nominal) on the rolled WCS and is
+    *added* to ``CRVAL``.
+
+    Parameters
+    ----------
+    slot_file : str or `pathlib.Path`
+    eui_syn_images : `numpy.ndarray` or str
+        Output of `create_syn_slot_images`, or its .npz.
+    rotation : bool, optional
+        Must match ``eui_syn_images`` unless it is a .npz.
+    roll_angles : array-like, optional
+        Trial angles (radians) the images were built with, if not the default.
+    margin : float, optional
+        Fraction of the finite region trimmed from each side for the template.
+    save_filename, output_dir : str, optional
+        Name and directory of the co-aligned file; default
+        ``<input stem>_coalign.fits`` next to the input.
+    plot : bool, optional
+        Blink the synthetic image against the co-aligned map.
+    title1, title2 : str, optional
+
+    Returns
+    -------
+    dict
+        ``dx``, ``dy`` (arcsec, added to CRVAL1/2), ``roll`` (deg), ``max_cc``,
+        ``all_cc`` (per trial angle) and ``output`` (written filename).
+    """
+    with fits.open(slot_file) as hdul:
+        data = np.asarray(hdul[0].data, dtype=float)
+        header = hdul[0].header.copy()
+    wcs = WCS(header).celestial
+
+    rot_angles = None
+    eui_label = 'EUI'
+    if isinstance(eui_syn_images, (str, Path)):
+        with np.load(eui_syn_images) as npz:
+            rot_angles = npz['rot_angles']
+            eui_label = str(npz['eui_label']) if 'eui_label' in npz.files else eui_label
+            eui_syn_images = npz['eui_syn_raster_images']
+    if rot_angles is None:
+        rot_angles = _trial_roll_angles(rotation) if roll_angles is None \
+            else np.atleast_1d(np.asarray(roll_angles, dtype=float))
+    if len(rot_angles) != len(eui_syn_images):
+        raise ValueError(f'{len(eui_syn_images)} synthetic images but {len(rot_angles)} '
+                         f'trial roll angles (rotation={rotation})')
+
+    # Template: centre of the region where SPICE and every synthetic image are finite
+    rs, cs = _finite_box(data)
+    common = np.isfinite(data[rs, cs])
+    for syn in eui_syn_images:
+        common &= np.isfinite(syn[rs, cs])
+    sub_r, sub_c = _finite_box(np.where(common, 1.0, np.nan))
+    r0, r1 = rs.start + sub_r.start, rs.start + sub_r.stop
+    c0, c1 = cs.start + sub_c.start, cs.start + sub_c.stop
+    my, mx = int(margin * (r1 - r0)), int(margin * (c1 - c0))
+    t_r0, t_c0 = r0 + my, c0 + mx
+    template = _fill_nan(data[t_r0:r1 - my, t_c0:c1 - mx])
+
+    shifts, max_ccs = [], []
+    for syn in eui_syn_images:
+        lr, lc = _finite_box(syn)
+        layer = _fill_nan(syn[lr, lc])
+        xs, ys, cc = coalign_shift_pixel(layer, template)
+        shifts.append((xs + lc.start, ys + lr.start))
+        max_ccs.append(cc)
+    best = int(np.argmax(max_ccs))
+    angle = rot_angles[best]
+    rot_matrix = _roll_matrix(angle, wcs)
+    wcs_best = deepcopy(wcs)
+    wcs_best.wcs.pc = np.dot(wcs.wcs.pc, rot_matrix)
+
+    found = wcs_best.pixel_to_world_values(*shifts[best])
+    nominal = wcs_best.pixel_to_world_values(t_c0, t_r0)
+    dx = ((found[0] - nominal[0] + 180) % 360 - 180) * 3600.0
+    dy = (found[1] - nominal[1]) * 3600.0
+
+    output = apply_slot_correction(
+        slot_file, dx, dy, np.rad2deg(angle), output_dir=output_dir,
+        save_filename=save_filename, reference=eui_label,
+        extra={'COALCC': (float(max_ccs[best]), 'Peak normalised cross-correlation')},
+        history='euispice_coalign.calculate_eui_spice_slot_shift')
+
+    if plot:
+        syn_best = eui_syn_images[best]
+        syn_map = sunpy.map.Map(syn_best, wcs_best)
+        # hdus=0: the merged file also holds WEIGHT/UNCERTAINTY/TIME images
+        new_map = sunpy.map.Map(output, hdus=0)
+        for m in (syn_map, new_map):
+            m.plot_settings['aspect'] = m.scale.axis2 / m.scale.axis1
+        if title1 is None:
+            title1 = f'{eui_label} synthetic'
+            if len(rot_angles) > 1:
+                title1 += f'\nroll {np.rad2deg(angle):+.2f}\N{DEGREE SIGN}'
+        if title2 is None:
+            title2 = f"SPICE {header.get('EXTNAME', '')}\nco-aligned"
+        SunBlinker(syn_map, new_map, reproject=True, fps=1, title1=title1, title2=title2,
+                   norm1=ImageNormalize(vmin=np.nanpercentile(syn_best, 0.2),
+                                        vmax=np.nanpercentile(syn_best, 99.8),
+                                        stretch=AsinhStretch(0.1)),
+                   norm2=ImageNormalize(vmin=np.nanpercentile(data, 0.2),
+                                        vmax=np.nanpercentile(data, 99.8),
+                                        stretch=AsinhStretch(0.1)))
+        plt.show()
+
+    return dict(dx=float(dx), dy=float(dy), roll=float(np.rad2deg(angle)),
+                max_cc=float(max_ccs[best]), all_cc=np.array(max_ccs), output=str(output))
+
+
+def apply_slot_correction(slot_file, dx, dy, roll, output_dir=None, save_filename=None,
+                          reference='', extra=None, history='euispice_coalign'):
+    """
+    Write a copy of a merged slot raster with a pointing correction applied.
+
+    The roll rotates the PC matrix about the reference pixel (post-multiplied
+    by `_roll_matrix`, as in the fits) and the shift is added to ``CRVAL``; all
+    image extensions (radiance, WEIGHT, UNCERTAINTY, TIME) are updated.
+
+    Parameters
+    ----------
+    slot_file : str
+    dx, dy : float
+        Arcsec added to ``CRVAL1``/``CRVAL2``.
+    roll : float
+        Degrees.
+    output_dir, save_filename : str, optional
+        Default ``<input stem>_coalign.fits`` next to the input.
+    reference : str, optional
+        Written to ``COALREF``.
+    extra : dict, optional
+        More primary-header cards, ``{key: (value, comment)}``.
+    history : str, optional
+
+    Returns
+    -------
+    str
+        The written filename.
+    """
+    header = fits.getheader(slot_file, 0)
+    wcs = WCS(header).celestial
+    rot_matrix = _roll_matrix(np.deg2rad(roll), wcs)
+    new_pc = np.dot(np.array([[header['PC1_1'], header['PC1_2']],
+                              [header['PC2_1'], header['PC2_2']]]), rot_matrix)
+    unit1 = u.Unit(header.get('CUNIT1', 'arcsec')).to(u.arcsec)
+    unit2 = u.Unit(header.get('CUNIT2', 'arcsec')).to(u.arcsec)
+    new_crval = (header['CRVAL1'] + dx / unit1, header['CRVAL2'] + dy / unit2)
+
+    outdir = Path(slot_file).parent if output_dir is None else Path(output_dir)
+    if save_filename is None:
+        save_filename = Path(slot_file).stem + '_coalign.fits'
+    output = outdir / save_filename
+    with fits.open(slot_file) as hdul:
+        for hdu in hdul:
+            if hdu.header.get('CTYPE1', '').startswith('HPLN'):
+                h = hdu.header
+                h['CRVAL1'], h['CRVAL2'] = new_crval
+                h['PC1_1'], h['PC1_2'] = new_pc[0]
+                h['PC2_1'], h['PC2_2'] = new_pc[1]
+        h0 = hdul[0].header
+        h0['COALREF'] = (reference, 'Reference of the co-alignment')
+        h0['COALDX'] = (float(dx), '[arcsec] Shift added to CRVAL1')
+        h0['COALDY'] = (float(dy), '[arcsec] Shift added to CRVAL2')
+        h0['COALROLL'] = (float(roll), '[deg] Roll correction applied to PC')
+        for key, value in (extra or {}).items():
+            h0[key] = value
+        h0.add_history(history)
+        hdul.writeto(output, overwrite=True)
+    return str(output)
+
+
+def _region_shift(data, syn, wcs, rows, cols, margin=0.2):
+    """
+    Translation (arcsec) that puts part ``rows`` x ``cols`` of a merged map
+    onto a synthetic EUI image of the same grid, and the peak correlation.
+    """
+    rs, cs = _finite_box(data[rows, cols])
+    r0, r1 = rows.start + rs.start, rows.start + rs.stop
+    c0, c1 = cols.start + cs.start, cols.start + cs.stop
+    my, mx = int(margin * (r1 - r0)), int(margin * (c1 - c0))
+    template = _fill_nan(data[r0 + my:r1 - my, c0 + mx:c1 - mx])
+    lr, lc = _finite_box(syn)
+    xs, ys, cc = coalign_shift_pixel(_fill_nan(syn[lr, lc]), template)
+    found = wcs.pixel_to_world_values(xs + lc.start, ys + lr.start)
+    nominal = wcs.pixel_to_world_values(c0 + mx, r0 + my)
+    return (((found[0] - nominal[0] + 180) % 360 - 180) * 3600.0,
+            (found[1] - nominal[1]) * 3600.0, cc)
+
+
+def fit_slot_step_scale(l2_file, window, response, eui_files=None, eui_frames=None,
+                        scales=(1.0, 1.02, 1.04, 1.06), **merge_kwargs):
+    """
+    Measure the raster-step multiplier of a slot raster against EUI.
+
+    The raster is merged with each trial multiplier of ``CDELT1``; the left
+    and right halves of the map are then co-aligned separately (translation
+    only) with a synthetic EUI image, and the difference of their x shifts is
+    recorded. The step is right when both halves need the same shift: the
+    zero of a straight line through the differences is returned. The halves
+    are ~4 raster steps apart, so a 1% step error shows up as ~1.2 arcsec,
+    well within reach of FSI, whereas the peak correlation itself barely
+    changes with the step.
+
+    Parameters
+    ----------
+    l2_file : str
+        SPICE L2 wide-slit raster.
+    window : int or str
+    response : `spice_slot_merge.SlotResponse`
+    eui_files : list of str, optional
+    eui_frames : `_EUIFrameSet`, optional
+        Reuse a frame set; one of ``eui_files``/``eui_frames`` is required.
+    scales : sequence of float, optional
+    **merge_kwargs
+        Passed to `spice_slot_merge.merge_slot_raster`.
+
+    Returns
+    -------
+    best : float
+        Multiplier at which the halves agree.
+    table : `numpy.ndarray`
+        ``(n_scales, 2)``: multiplier, x(left) - x(right) in arcsec.
+    """
+    import spice_slot_merge as ssm
+
+    if eui_frames is None:
+        eui_frames = _EUIFrameSet(eui_files)
+    raster = ssm.read_slot_raster(l2_file, window)
+    table = []
+    for scale in scales:
+        hdul = ssm.merge_slot_raster(raster, response, uncertainty=False, step_scale=scale,
+                                     **merge_kwargs)
+        syn = create_syn_slot_images(hdul, None, rotation=False, eui_frames=eui_frames)[0]
+        data = np.asarray(hdul[0].data, dtype=float)
+        wcs = WCS(hdul[0].header).celestial
+        ny, nx = data.shape
+        left = _region_shift(data, syn, wcs, slice(0, ny), slice(0, nx // 2))
+        right = _region_shift(data, syn, wcs, slice(0, ny), slice(nx // 2, nx))
+        table.append((scale, left[0] - right[0]))
+    table = np.array(table)
+    slope, intercept = np.polyfit(table[:, 0], table[:, 1], 1)
+    return float(-intercept / slope), table
+
+
+def coalign_slot_files(slot_files, eui_files, rotation=True, blur='auto', output_dir=None,
+                       syn_dir=None, max_cached=8, verbose=True, roll_angles=None):
+    """
+    Co-align many merged slot rasters of one window against one EUI channel,
+    sharing a single cached EUI frame set.
+
+    Parameters
+    ----------
+    slot_files : list of str
+    eui_files : list of str
+    rotation : bool, optional
+    blur : 'auto', (float, float) or None, optional
+        'auto' derives the blur from the first slot file (`slot_blur`).
+    output_dir : str, optional
+        Directory for the co-aligned files (default: next to each input).
+    syn_dir : str, optional
+        If given, the synthetic images are saved there as .npz.
+    max_cached : int, optional
+
+    Returns
+    -------
+    `astropy.table.Table`
+        One row per file: file, date, dx, dy, roll, max_cc, output.
+    """
+    from astropy.table import Table
+
+    slot_files = [str(f) for f in slot_files]
+    if blur == 'auto':
+        probe = fits.getheader(eui_files[0], ext=1)
+        scale = abs(probe['CDELT1']) * u.Unit(probe.get('CUNIT1', 'arcsec')).to(u.arcsec)
+        blur = slot_blur(fits.getheader(slot_files[0], 0), scale)
+    frames = _EUIFrameSet(eui_files, max_cached=max_cached, blur=blur)
+    rows = []
+    for f in slot_files:
+        npz = None if syn_dir is None else str(Path(syn_dir) / (Path(f).stem + '_syn.npz'))
+        syn = create_syn_slot_images(f, None, rotation=rotation, eui_frames=frames,
+                                     save_filename=npz, roll_angles=roll_angles)
+        res = calculate_eui_spice_slot_shift(f, syn, rotation=rotation, output_dir=output_dir,
+                                             roll_angles=roll_angles)
+        date = fits.getheader(f, 0).get('DATE-AVG', '')
+        rows.append((Path(f).name, date, res['dx'], res['dy'], res['roll'], res['max_cc'],
+                     res['output']))
+        if verbose:
+            print(f"{Path(f).name}: dx {res['dx']:+.2f}\" dy {res['dy']:+.2f}\" "
+                  f"roll {res['roll']:+.2f} deg cc {res['max_cc']:.3f}")
+    return Table(rows=rows, names=('file', 'date', 'dx', 'dy', 'roll', 'max_cc', 'output'))
+
+
 if __name__ == '__main__':
     # Usage examples for every option are in the module docstring at the top.
     parser = argparse.ArgumentParser(description='Co-align EUI synoptic raster with SPICE data')
@@ -928,12 +1532,35 @@ if __name__ == '__main__':
     parser.add_argument('-t2', '--title2', type=str, default=None,
                         help='Title of the SPICE frame in the blink comparison')
 
+    parser.add_argument('--no-blur', dest='blur', action='store_false',
+                        help='Merged slot rasters only: do not blur EUI to the SPICE resolution')
+
     args = parser.parse_args()
 
     if os.path.isdir(args.eui_files):
         eui_files = sorted(glob(os.path.join(args.eui_files, '*.fits')))
     else:
         eui_files = sorted(glob(args.eui_files))
+
+    if is_slot_merged(args.spice_file):
+        # Merged slot raster: one window per file, so -w and -c1 do not apply.
+        if args.cdelt1 != 1:
+            parser.error('-c1 is not supported for merged slot rasters')
+        if args.synthetic_raster_filename is None:
+            syn_file = os.path.join(os.path.dirname(eui_files[0]),
+                                    Path(args.spice_file).stem + '_syn.npz')
+            syn = create_syn_slot_images(args.spice_file, eui_files, rotation=args.rotation,
+                                         solar_rotation=args.solar_rotation,
+                                         blur='auto' if args.blur else None,
+                                         save_filename=syn_file)
+        else:
+            syn = args.synthetic_raster_filename
+        result = calculate_eui_spice_slot_shift(
+            args.spice_file, syn, rotation=args.rotation, save_filename=args.save_filename,
+            output_dir=args.output_dir, plot=args.plot, title1=args.title1, title2=args.title2)
+        print(f"dx {result['dx']:+.2f} arcsec, dy {result['dy']:+.2f} arcsec, roll "
+              f"{result['roll']:+.2f} deg, cc {result['max_cc']:.3f} -> {result['output']}")
+        raise SystemExit(0)
 
     if args.synthetic_raster_filename is None:
         synthetic_raster_filename = os.path.join(os.path.dirname(eui_files[0]),
